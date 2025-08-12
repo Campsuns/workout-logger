@@ -20,11 +20,21 @@
     <section id="page-list" class="page active">
       <div class="filters">
         <select id="splitSelect"></select>
-        <select id="equipmentFilter"><option value="">All equipment</option></select>
-        <select id="muscleFilter"><option value="">All muscles</option></select>
+        <select id="equipmentFilter"><option value="">Equipment</option></select>
+        <select id="muscleFilter"><option value="">Muscle</option></select>
         <button id="btnAddExercise" class="ghost">+ New</button>
       </div>
-      <div id="workoutList" class="cards"></div>
+
+      <div id="selectedSplitWrap" class="group" hidden>
+        <div class="group-title">Selected Split</div>
+        <div id="selectedSplitList" class="cards"></div>
+      </div>
+
+      <div id="otherWrap" class="group">
+        <div class="group-title" id="otherTitle" hidden>Other Exercises</div>
+        <div id="workoutList" class="cards"></div>
+      </div>
+
       <div class="spacer"></div>
     </section>
 
@@ -40,21 +50,23 @@
     </section>
   </main>
 
-  <!-- LOGGING MODAL -->
+  <!-- LOGGING MODAL (single column on mobile) -->
   <dialog id="logModal">
     <form method="dialog" class="logform">
       <div class="header">
         <h3 id="logTitle">Exercise</h3>
         <p id="logSub"></p>
       </div>
-      <div class="steppers">
-        <div class="stepper" data-field="set_number"><label>SET</label><div class="ctr"><button type="button" class="up">▲</button><span>1</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="reps"><label>REPS</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
+
+      <div class="stack">
+        <div class="stepper" data-field="sets_done"><label>SETS</label><div class="ctr"><button type="button" class="up">▲</button><span>3</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="planned_reps"><label>REPS</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
         <div class="stepper" data-field="weight_lb"><label>WEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>135</span><button type="button" class="down">▼</button></div></div>
         <div class="stepper" data-field="height"><label>HEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>0</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="fail"><label>FAIL</label><div class="ctr"><button type="button" class="toggle">No</button></div></div>
-        <div class="stepper" data-field="rpe"><label>RPE</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="fail_last"><label>FAIL (last set)</label><div class="ctr"><button type="button" class="toggle">No</button></div></div>
+        <div class="stepper" data-field="rpe_set2"><label>RPE (set 2)</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
       </div>
+
       <textarea id="logNotes" placeholder="Notes (optional)"></textarea>
       <menu>
         <button value="cancel" class="ghost">Cancel</button>
@@ -87,6 +99,7 @@
     </form>
   </dialog>
 
+  <div id="toast" class="toast" hidden></div>
   <script src="app.js"></script>
 </body>
 </html>
