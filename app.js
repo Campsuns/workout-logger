@@ -1,7 +1,7 @@
 // ==== CONFIG – paste your Apps Script Web App URL + token ====
 const CONFIG = {
-  API_URL: 'PASTE_WEB_APP_URL_HERE',
-  TOKEN: 'PASTE_API_TOKEN_HERE',
+  API_URL: 'https://script.google.com/macros/s/AKfycbzQmuBTqcODPLJc2U1GhIgKEK_xaa0buIdC55mIWv1hg7QoXwyxe36tMNfjyl3HIWFKew/exec',
+  TOKEN: 'n7V6p3kFQw9zL1r8U2y4T0bC5mA7',
   WEEK_START: 1,
   REP_MIN: 6,
   REP_MAX: 12,
