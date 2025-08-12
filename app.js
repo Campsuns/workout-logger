@@ -37,9 +37,106 @@ async function fetchAll(){ const data = await apiGet({action:'getAll'}); if(data
 $$('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>{ $$('[data-nav]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); $$('.page').forEach(p=>p.classList.remove('active')); const page = btn.dataset.nav; state.page = page; store.set({page}); $('#page-'+page).classList.add('active'); }));
 (function restoreUI(){ const s = store.get(); if(s.page){ state.page = s.page; $$('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===s.page)); $$('.page').forEach(p=>p.classList.remove('active')); $('#page-'+s.page).classList.add('active'); } if(s.period){ state.period=s.period; $$('.period-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.period===s.period)); } if(s.split){ state.currentSplit=s.split; } if(s.eq!==undefined){ state.eq=s.eq; } if(s.mg!==undefined){ state.mg=s.mg; } })();
 $$('.period-tabs button').forEach(btn=>btn.addEventListener('click',()=>{ $$('.period-tabs button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); state.period = btn.dataset.period; store.set({period: state.period}); renderSummary(); }));
-function renderFilters(){ const splitSel = $('#splitSelect'); const splits = [...new Set(state.splits.map(s=>s.split_name))]; splitSel.innerHTML = `<option value="">All</option>` + splits.map(s=>`<option>${s}</option>`).join(''); splitSel.value = state.currentSplit||''; splitSel.onchange = ()=>{ state.currentSplit = splitSel.value; store.set({split: state.currentSplit}); renderList(); }; const equipments = [...new Set(state.exercises.map(e=>String(e.equipment||'').toLowerCase()).filter(Boolean))].sort(); const muscles = uniqueMuscles(state.exercises); $('#equipmentFilter').innerHTML = `<option value="">Equipment</option>` + equipments.map(x=>`<option>${x}</option>`).join(''); $('#muscleFilter').innerHTML = `<option value="">Muscle</option>` + muscles.map(x=>`<option>${x}</option>`).join(''); $('#equipmentFilter').value = state.eq||''; $('#muscleFilter').value = state.mg||''; $('#equipmentFilter').onchange = ()=>{ state.eq = $('#equipmentFilter').value; store.set({eq: state.eq}); renderList(); }; $('#muscleFilter').onchange = ()=>{ state.mg = $('#muscleFilter').value; store.set({mg: state.mg}); renderList(); }; $('#btnAddExercise').onclick = ()=> openAddWizard(); $('#btnResetDone').onclick = ()=>{ localStorage.removeItem('doneMap'); renderList(); toast('Highlights reset'); }; }
+
+function renderFilters(){
+  const splitSel = $('#splitSelect');
+  const splits = [...new Set(state.splits.map(s=>String(s.split_name||'').trim()))].filter(Boolean);
+  splitSel.innerHTML = `<option value="">All</option>` + splits.map(s=>`<option>${s}</option>`).join('');
+  splitSel.value = state.currentSplit||'';
+  splitSel.onchange = ()=>{ state.currentSplit = splitSel.value; store.set({split: state.currentSplit}); renderList(); };
+
+  // Equipment: keep the value lowercase for filtering, show Title Case in the UI
+  const equipmentsRaw = [...new Set(state.exercises
+    .map(e=>String(e.equipment||'').trim())
+    .filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b));
+
+  const equipmentOptions = equipmentsRaw.map(lbl=>{
+    const val = lbl.toLowerCase();
+    // Simple title case for display (preserve things like EZ/V-Bar if they’re already capitalized in the sheet)
+    const display = lbl.replace(/\b\w/g, c=>c.toUpperCase()).replace(/\bEz\b/g,'EZ').replace(/\bV Bar\b/g,'V-Bar');
+    return { value: val, label: display };
+  });
+
+  $('#equipmentFilter').innerHTML = `<option value="">Equipment</option>` +
+    equipmentOptions.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+
+  // Muscles: already Title Case in the sheet; use as-is for labels and filtering
+  const muscles = uniqueMuscles(state.exercises);
+  $('#muscleFilter').innerHTML = `<option value="">Muscle</option>` + muscles.map(x=>`<option>${x}</option>`).join('');
+
+  // Restore persisted selection
+  $('#equipmentFilter').value = state.eq||'';
+  $('#muscleFilter').value = state.mg||'';
+
+  $('#equipmentFilter').onchange = ()=>{
+    state.eq = $('#equipmentFilter').value;
+    store.set({eq: state.eq});
+    renderList();
+  };
+  $('#muscleFilter').onchange = ()=>{
+    state.mg = $('#muscleFilter').value;
+    store.set({mg: state.mg});
+    renderList();
+  };
+
+  $('#btnAddExercise').onclick = ()=> openAddWizard();
+  $('#btnResetDone').onclick = ()=>{ localStorage.removeItem('doneMap'); renderList(); toast('Highlights reset'); };
+}
+
+
 function makeCardHTML(e){ const sugg = suggestNext(e.id, chooseSide(e.id)); const subSetup = [e.equipment, (sugg.height>0 ? `Height ${fmt(sugg.height)}` : '')].filter(Boolean).join(' • '); const subPlan = `${fmt(sugg.reps)} reps × ${fmt(sugg.sets)}`; const done = isDone(e.id); return `<div class="card ${done?'done':''}" data-id="${e.id}"><div><div class="name">${e.name}</div><div class="meta">${subSetup||' '}</div><div class="plan">${subPlan}</div></div><div class="pill">${fmt(sugg.weight)} lb</div></div>`; }
-function renderList(){ const eq = (state.eq||'').toLowerCase(); const mg = state.mg; const wrapSel = $('#selectedSplitWrap'); const listSel = $('#selectedSplitList'); const otherTitle = $('#otherTitle'); const otherList = $('#workoutList'); let items = state.exercises.slice(); if(eq) items = items.filter(e=>String(e.equipment).toLowerCase()===eq); if(mg) items = items.filter(e=>musclesOf(e).includes(mg)); if(state.currentSplit){ const splitRows = state.splits.filter(s=>s.split_name===state.currentSplit).sort((a,b)=>Number(a.order)-Number(b.order)); const splitIds = splitRows.map(r=>r.exercise_id); const top = splitIds.map(id=>items.find(e=>e.id===id)).filter(Boolean); const rest = items.filter(e=>!splitIds.includes(e.id)); wrapSel.hidden = False; listSel.innerHTML = top.map(makeCardHTML).join(''); otherTitle.hidden = False; otherList.innerHTML = rest.map(makeCardHTML).join(''); } else { wrapSel.hidden = True; otherTitle.hidden = True; otherList.innerHTML = items.map(makeCardHTML).join(''); } $$('#workoutList .card, #selectedSplitList .card').forEach(c=>c.addEventListener('click',()=>openLog(c.dataset.id))); }
+
+function renderList(){
+  const eqVal = (state.eq||'').toLowerCase();
+  const mgVal = state.mg||'';
+
+  const wrapSel   = $('#selectedSplitWrap');
+  const listSel   = $('#selectedSplitList');
+  const otherTitle= $('#otherTitle');
+  const otherList = $('#workoutList');
+
+  // Start from all exercises
+  let items = state.exercises.slice();
+
+  // Equipment filter (compare lowercase)
+  if(eqVal) items = items.filter(e=>String(e.equipment||'').toLowerCase() === eqVal);
+
+  // Muscle filter (exact match on Title Case label)
+  if(mgVal) items = items.filter(e=>musclesOf(e).includes(mgVal));
+
+  if(state.currentSplit){
+    // Build list for selected split (ordered) + the rest
+    const splitRows = state.splits
+      .filter(s=>String(s.split_name||'')===state.currentSplit)
+      .sort((a,b)=>Number(a.order||0)-Number(b.order||0));
+
+    const splitIds = splitRows.map(r=>r.exercise_id);
+    const top  = splitIds.map(id=>items.find(e=>e.id===id)).filter(Boolean);
+    const rest = items.filter(e=>!splitIds.includes(e.id));
+
+    wrapSel.hidden = false;                         // ✅ JS booleans
+    listSel.innerHTML = top.map(makeCardHTML).join('');
+    otherTitle.hidden = false;                      // ✅ JS booleans
+    otherList.innerHTML = rest.map(makeCardHTML).join('');
+  } else {
+    wrapSel.hidden = true;                          // ✅ JS booleans
+    otherTitle.hidden = true;                       // ✅ JS booleans
+    otherList.innerHTML = items.map(makeCardHTML).join('');
+  }
+
+  // Attach click handlers
+  $$('#workoutList .card, #selectedSplitList .card').forEach(c=>{
+    c.addEventListener('click',()=>openLog(c.dataset.id));
+  });
+
+  // If nothing shows due to a stale persisted filter, hint visually
+  if(!items.length){
+    otherList.innerHTML = `<div class="meta" style="padding:8px 4px;">No exercises match the current filters.</div>`;
+  }
+}
+
+
 let modal, stepVals, curEx;
 function openLog(exId){ curEx = state.byId[exId]; if(!curEx) return; modal = $('#logModal'); $('#logTitle').textContent = curEx.name; $('#logSub').textContent = [curEx.variation, musclesOf(curEx).join('/'), curEx.equipment].filter(Boolean).join(' • '); const side = chooseSide(exId); $$('#sideSeg button').forEach(b=>b.classList.toggle('active', b.dataset.side===side)); const sugg = suggestNext(exId, side); stepVals = { side, sets_done: Number(curEx.sets||3), planned_reps: sugg.reps||8, weight_lb: sugg.weight||0, height: sugg.height||0, fail_reps: Math.max(CONFIG.REP_MIN, sugg.reps||8), rpe_set2: 8 }; $$('.stack .stepper').forEach(bindStepper); $$('#sideSeg button').forEach(b=>b.onclick = ()=>{ $$('#sideSeg button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); stepVals.side = b.dataset.side; saveSide(curEx.id, stepVals.side); const s2=suggestNext(curEx.id, stepVals.side); stepVals.weight_lb=s2.weight; stepVals.planned_reps=s2.reps; stepVals.height=s2.height; updateSteppers(); }); $('#logNotes').value = ''; modal.showModal(); }
 function updateSteppers(){ $$('.stack .stepper').forEach(node=>{ const field=node.dataset.field; const span=$('span',node); if(field && span) span.textContent = fmt(stepVals[field]); }); }
