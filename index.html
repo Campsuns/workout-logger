@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="flash"></></div>
   <header class="topbar">
     <div class="brand">Workout Logger</div>
     <nav>
@@ -14,31 +15,28 @@
       <button data-nav="summary">Summary</button>
     </nav>
   </header>
-
   <main>
-    <!-- PAGE: LIST -->
     <section id="page-list" class="page active">
       <div class="filters">
         <select id="splitSelect"></select>
         <select id="equipmentFilter"><option value="">Equipment</option></select>
         <select id="muscleFilter"><option value="">Muscle</option></select>
-        <button id="btnAddExercise" class="ghost">+ New</button>
+        <div class="btnrow">
+          <button id="btnAddExercise" class="ghost">+ New</button>
+          <button id="btnResetDone" class="ghost">Reset done</button>
+        </div>
       </div>
-
       <div id="selectedSplitWrap" class="group" hidden>
         <div class="group-title">Selected Split</div>
         <div id="selectedSplitList" class="cards"></div>
       </div>
-
       <div id="otherWrap" class="group">
         <div class="group-title" id="otherTitle" hidden>Other Exercises</div>
         <div id="workoutList" class="cards"></div>
       </div>
-
       <div class="spacer"></div>
     </section>
 
-    <!-- PAGE: SUMMARY -->
     <section id="page-summary" class="page">
       <div class="period-tabs">
         <button data-period="week" class="active">This Week</button>
@@ -50,7 +48,6 @@
     </section>
   </main>
 
-  <!-- LOGGING MODAL (single column on mobile) -->
   <dialog id="logModal">
     <form method="dialog" class="logform">
       <div class="header">
@@ -59,12 +56,20 @@
       </div>
 
       <div class="stack">
-        <div class="stepper" data-field="sets_done"><label>SETS</label><div class="ctr"><button type="button" class="up">▲</button><span>3</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="planned_reps"><label>REPS</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="weight_lb"><label>WEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>135</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="height"><label>HEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>0</span><button type="button" class="down">▼</button></div></div>
-        <div class="stepper" data-field="fail_last"><label>FAIL (last set)</label><div class="ctr"><button type="button" class="toggle">No</button></div></div>
-        <div class="stepper" data-field="rpe_set2"><label>RPE (set 2)</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
+        <div class="seg"><span>Side</span>
+          <div class="seg-buttons" id="sideSeg">
+            <button type="button" data-side="both" class="active">Both</button>
+            <button type="button" data-side="left">Left</button>
+            <button type="button" data-side="right">Right</button>
+          </div>
+        </div>
+
+        <div class="stepper" data-field="sets_done"><label>Sets</label><div class="ctr"><button type="button" class="down">▼</button><span>3</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="planned_reps"><label>Reps</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="weight_lb"><label>Weight</label><div class="ctr"><button type="button" class="down">▼</button><span>135</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="height"><label>Height</label><div class="ctr"><button type="button" class="down">▼</button><span>0</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="fail_reps"><label>Fail reps (last set)</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="rpe_set2"><label>RPE (set 2)</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
       </div>
 
       <textarea id="logNotes" placeholder="Notes (optional)"></textarea>
@@ -73,29 +78,29 @@
         <button id="btnLog" value="default">Log</button>
       </menu>
     </form>
-    <div class="check-pop" id="checkPop">✓</div>
   </dialog>
 
-  <!-- ADD EXERCISE MODAL -->
   <dialog id="addModal">
     <form method="dialog" class="logform">
       <div class="header"><h3>Add Exercise</h3></div>
-      <div class="grid2">
-        <input id="exName" placeholder="Name" required />
-        <input id="exVar" placeholder="Variation" />
-        <input id="exPri" placeholder="Primary muscle" />
-        <input id="exSec" placeholder="Secondary muscle" />
-        <input id="exTer" placeholder="Tertiary muscle" />
-        <input id="exEq" placeholder="Equipment" />
-        <input id="exSets" type="number" min="1" step="1" placeholder="Sets (e.g., 3)" />
-        <input id="exW" type="number" step="1" placeholder="Default weight (lb)" />
-        <input id="exH" type="number" step="1" placeholder="Default height" />
-        <input id="exInc" type="number" step="0.5" placeholder="Increment lb (optional)" />
+      <div class="wizard">
+        <div class="q" data-k="name"><label>Name</label><input id="exName" placeholder="e.g., Bench press" required /></div>
+        <div class="q" data-k="variation"><label>Variation</label><input id="exVar" placeholder="e.g., Incline" /></div>
+        <div class="q" data-k="equipment"><label>Equipment / attachment</label><input id="exEq" placeholder="e.g., Dumbbell, rope, smith" /></div>
+        <div class="q" data-k="primary"><label>Primary muscle</label><input id="exPri" placeholder="e.g., Chest" /></div>
+        <div class="q" data-k="secondary"><label>Secondary muscle</label><input id="exSec" placeholder="e.g., Triceps" /></div>
+        <div class="q" data-k="tertiary"><label>Tertiary muscle</label><input id="exTer" placeholder="e.g., Front delt" /></div>
+        <div class="q" data-k="sets"><label>Sets</label><input id="exSets" type="number" min="1" step="1" placeholder="e.g., 3" /></div>
+        <div class="q" data-k="default_weight"><label>Default weight (lb)</label><input id="exW" type="number" step="1" placeholder="e.g., 45" /></div>
+        <div class="q" data-k="default_height"><label>Default height</label><input id="exH" type="number" step="1" placeholder="e.g., 10" /></div>
+        <div class="q" data-k="increment_lb"><label>Increment (lb)</label><input id="exInc" type="number" step="0.5" placeholder="e.g., 5" /></div>
       </div>
-      <menu>
-        <button value="cancel" class="ghost">Cancel</button>
-        <button id="btnSaveExercise" value="default">Save</button>
-      </menu>
+      <div class="wiz-nav">
+        <button id="wizPrev" class="ghost" type="button">Back</button>
+        <div class="sp"></div>
+        <button id="wizNext" class="ghost" type="button">Next</button>
+        <button id="wizSave" type="button">Save</button>
+      </div>
     </form>
   </dialog>
 
