@@ -1,0 +1,52 @@
+:root{ --bg:#0b0b0c; --fg:#fff; --muted:#a0a0a8; --card:#111216; --acc:#2dd4bf; --soft:#1a1b21; }
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.topbar{ position:sticky; top:0; z-index:10; background:linear-gradient(180deg,#0b0b0c,#0b0b0cdd 60%,transparent); display:flex; align-items:center; justify-content:space-between; padding:12px 16px; backdrop-filter: blur(8px); }
+.topbar .brand{ font-weight:700; letter-spacing:.3px; }
+.topbar nav button{ background:#15161b; border:1px solid #23242b; color:#ddd; border-radius:999px; padding:8px 12px; margin-left:8px; }
+.topbar nav button.active{ border-color:var(--acc); color:#fff; }
+main{ padding:12px; }
+.filters{ display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; position:sticky; top:52px; padding:8px 0; background:var(--bg); }
+select, button, textarea, input{ font:inherit; }
+select, input{ width:100%; padding:10px; background:#15161b; color:#fff; border:1px solid #23242b; border-radius:10px; }
+button{ cursor:pointer; }
+button.ghost{ background:#15161b; color:#ddd; border:1px dashed #2a2b32; border-radius:12px; padding:10px 12px; }
+.cards{ display:grid; grid-template-columns:1fr; gap:10px; }
+.card{ background:var(--card); border:1px solid #191a20; border-radius:16px; padding:14px; display:flex; align-items:center; justify-content:space-between; }
+.card .meta{ color:var(--muted); font-size:13px; }
+.card:hover{ border-color:#2a2b32; }
+.tag{ font-size:12px; padding:2px 8px; border-radius:999px; background:#1c1d23; border:1px solid #2a2b32; color:#cfcfd6; }
+.page{ display:none; }
+.page.active{ display:block; }
+.period-tabs{ display:flex; gap:8px; padding:8px 0; position:sticky; top:52px; background:var(--bg); }
+.period-tabs button{ background:#15161b; border:1px solid #23242b; color:#ddd; border-radius:999px; padding:8px 12px; }
+.period-tabs button.active{ border-color:var(--acc); color:#fff; }
+.summary{ display:grid; gap:12px; }
+.summary .block{ background:#111216; border:1px solid #1d1e25; border-radius:16px; padding:14px; }
+.spacer{ height:64px; }
+
+/* Modal */
+dialog{ width:100%; max-width:560px; border:none; border-radius:20px; padding:0; background:#0d0e12; color:#fff; }
+dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
+.logform{ padding:16px; }
+.logform .header h3{ margin:0; }
+.logform .header p{ margin:4px 0 14px; color:var(--muted); }
+.steppers{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px; }
+.stepper{ background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:10px; text-align:center; }
+.stepper label{ display:block; font-weight:700; font-size:12px; color:#c7c7d0; letter-spacing:.4px; }
+.stepper .ctr{ margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.stepper .ctr button{ width:40px; height:40px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff; }
+.stepper .ctr span{ font-size:28px; font-weight:800; letter-spacing:1px; display:inline-block; width:72px; text-align:center; }
+.stepper .ctr .toggle{ flex:1; }
+textarea{ width:100%; min-height:72px; background:#0f1015; border:1px solid #1f2028; border-radius:14px; padding:10px; color:#fff; }
+menu{ display:flex; gap:10px; justify-content:flex-end; margin:12px 0 0; padding:0; }
+menu button{ padding:10px 14px; border-radius:12px; border:1px solid #2a2b32; background:#15161b; color:#fff; }
+#btnLog{ background:var(--acc); border-color:var(--acc); color:#002b27; font-weight:700; }
+
+/* Add modal */
+.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+/* Check animation */
+.check-pop{ position:absolute; inset:0; display:grid; place-items:center; font-size:64px; color:#2dd4bf; opacity:0; transform:scale(.6); pointer-events:none; }
+.check-pop.show{ animation: pop .6s ease forwards; }
+@keyframes pop{ 0%{opacity:0; transform:scale(.6);} 30%{opacity:1; transform:scale(1.08);} 100%{opacity:0; transform:scale(1);} }

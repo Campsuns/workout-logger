@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workout Logger</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Workout Logger</div>
+    <nav>
+      <button data-nav="list" class="active">Workouts</button>
+      <button data-nav="summary">Summary</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- PAGE: LIST -->
+    <section id="page-list" class="page active">
+      <div class="filters">
+        <select id="splitSelect"></select>
+        <select id="equipmentFilter"><option value="">All equipment</option></select>
+        <select id="muscleFilter"><option value="">All muscles</option></select>
+        <button id="btnAddExercise" class="ghost">+ New</button>
+      </div>
+      <div id="workoutList" class="cards"></div>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- PAGE: SUMMARY -->
+    <section id="page-summary" class="page">
+      <div class="period-tabs">
+        <button data-period="week" class="active">This Week</button>
+        <button data-period="month">This Month</button>
+        <button data-period="year">This Year</button>
+      </div>
+      <div id="summaryContent" class="summary"></div>
+      <div class="spacer"></div>
+    </section>
+  </main>
+
+  <!-- LOGGING MODAL -->
+  <dialog id="logModal">
+    <form method="dialog" class="logform">
+      <div class="header">
+        <h3 id="logTitle">Exercise</h3>
+        <p id="logSub"></p>
+      </div>
+      <div class="steppers">
+        <div class="stepper" data-field="set_number"><label>SET</label><div class="ctr"><button type="button" class="up">▲</button><span>1</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="reps"><label>REPS</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="weight_lb"><label>WEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>135</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="height"><label>HEIGHT</label><div class="ctr"><button type="button" class="up">▲</button><span>0</span><button type="button" class="down">▼</button></div></div>
+        <div class="stepper" data-field="fail"><label>FAIL</label><div class="ctr"><button type="button" class="toggle">No</button></div></div>
+        <div class="stepper" data-field="rpe"><label>RPE</label><div class="ctr"><button type="button" class="up">▲</button><span>8</span><button type="button" class="down">▼</button></div></div>
+      </div>
+      <textarea id="logNotes" placeholder="Notes (optional)"></textarea>
+      <menu>
+        <button value="cancel" class="ghost">Cancel</button>
+        <button id="btnLog" value="default">Log</button>
+      </menu>
+    </form>
+    <div class="check-pop" id="checkPop">✓</div>
+  </dialog>
+
+  <!-- ADD EXERCISE MODAL -->
+  <dialog id="addModal">
+    <form method="dialog" class="logform">
+      <div class="header"><h3>Add Exercise</h3></div>
+      <div class="grid2">
+        <input id="exName" placeholder="Name" required />
+        <input id="exVar" placeholder="Variation" />
+        <input id="exPri" placeholder="Primary muscle" />
+        <input id="exSec" placeholder="Secondary muscle" />
+        <input id="exTer" placeholder="Tertiary muscle" />
+        <input id="exEq" placeholder="Equipment" />
+        <input id="exSets" type="number" min="1" step="1" placeholder="Sets (e.g., 3)" />
+        <input id="exW" type="number" step="1" placeholder="Default weight (lb)" />
+        <input id="exH" type="number" step="1" placeholder="Default height" />
+        <input id="exInc" type="number" step="0.5" placeholder="Increment lb (optional)" />
+      </div>
+      <menu>
+        <button value="cancel" class="ghost">Cancel</button>
+        <button id="btnSaveExercise" value="default">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
