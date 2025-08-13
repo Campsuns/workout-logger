@@ -18,7 +18,40 @@ select, input{ width:100%; padding:12px; background:#15161b; color:#fff; border:
 button{ cursor:pointer; }
 button.ghost{ background:#15161b; color:#ddd; border:1px dashed #2a2b32; border-radius:12px; padding:10px 12px; }
 .group-title{ color:#c7c7d0; font-size:12px; letter-spacing:.2px; margin:14px 0 8px; opacity:.9; }
+
 .cards{ display:grid; grid-template-columns:1fr; gap:10px; }
+
+/* Card layout */
+.card{
+  background:var(--card);
+  border:1px solid #191a20;
+  border-radius:16px;
+  padding:12px;
+  display:grid;
+  grid-template-columns: 1fr auto; /* left column + right pill */
+  gap:8px;
+  align-items:center;
+}
+.card:hover{ border-color:#2a2b32; }
+.card.done{ border-color:#21443f; box-shadow:0 0 0 1px #21443f inset; }
+.card.done .repsets{ background:#123c36; border-color:#1f5d55; color:#b6fff2; }
+
+.card .left{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.name-line{ display:flex; align-items:baseline; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.name{ font-weight:800; }
+.variation{ font-size:13px; color:#aeb0b9; font-weight:600; }
+
+.line.meta{ color:#aeb0b9; font-size:13px; }
+.line.weight{ color:#e8e9ef; font-size:14px; font-weight:700; }
+
+/* Right pill now shows reps × sets */
+.pill.repsets{
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#1c1d23; border:1px solid #2a2b32; color:#cfcfd6;
+  border-radius:999px; padding:8px 12px;
+  min-width:98px; white-space:nowrap; font-variant-numeric: tabular-nums;
+}
+
 .card{ background:var(--card); border:1px solid #191a20; border-radius:16px; padding:12px; display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; }
 .card .name{ font-weight:700; margin-bottom:2px; }
 .card .meta{ color:#aeb0b9; font-size:13px; }
