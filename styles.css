@@ -95,3 +95,33 @@ menu button{ padding:10px 14px; border-radius:12px; border:1px solid #2a2b32; ba
 .wiz-nav .sp{ flex:1; }
 #wizSave{ background:#2dd4bf; border-color:#2dd4bf; color:#00322c; border-radius:12px; padding:10px 16px; }
 .subgroup { margin-bottom: 12px; }
+
+
+/* === User switcher === */
+.topbar .top-right{ display:flex; gap:8px; align-items:center; }
+#userSelect{ background:#15161b; color:#ddd; border:1px solid #23242b; border-radius:999px; padding:8px 12px; height:auto; }
+
+/* Center/nudge filter text up and apply to + New / Reset */
+.filters select, .filters button{ display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px); }
+
+/* Prevent double-tap zoom on iOS for tap-heavy buttons */
+.stepper .ctr button, .period-tabs button, .filters button{ touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+/* Skip Progress button layout */
+menu{ display:flex; gap:10px; justify-content:flex-end; align-items:center; margin:12px 0 0; padding:0; }
+menu .sp{ flex:1; }
+
+/* Compact modal for small screens */
+@media (max-width: 420px){
+  .logform{ padding:12px; }
+  .stack{ gap:8px; }
+  .seg{ padding:8px; }
+  .stepper{ padding:8px; }
+  .stepper label{ font-size:11px; }
+  .stepper .ctr button{ width:40px; height:40px; border-radius:10px; }
+  .stepper .ctr span{ width:72px; font-size:24px; }
+  textarea{ min-height:56px; }
+}
+
+/* Group headings spacing for equipment sections */
+.subgroup{ margin-bottom:12px; }

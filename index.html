@@ -10,7 +10,9 @@
   <div id="flash"></div>
   <header class="topbar">
     <div class="brand">Workout Logger</div>
-    <nav>
+    <div class="top-right">
+      <select id="userSelect" title="User"></select>
+      <nav>
       <button data-nav="list" class="active">Workouts</button>
       <button data-nav="summary">Summary</button>
     </nav>
@@ -75,6 +77,8 @@
       <textarea id="logNotes" placeholder="Notes (optional)"></textarea>
       <menu>
         <button value="cancel" class="ghost">Cancel</button>
+        <button id="btnSkip" class="ghost" type="button">Skip Progress</button>
+        <div class="sp"></div>
         <button id="btnLog" value="default">Log</button>
       </menu>
     </form>
