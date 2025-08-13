@@ -289,4 +289,3 @@ body.annie{
 .filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip, .nav-tabs button, .period-tabs button{
   display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
 }
-
