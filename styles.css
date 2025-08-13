@@ -391,3 +391,107 @@ body.annie{
 .user-chip, .nav-tabs button, .period-tabs button{
   display:inline-flex; align-items:center; justify-content:center; transform:translateY(-2px);
 }
+
+/* ================= FINAL OVERRIDES ================= */
+
+/* --- Feather the frosted header & filters --- */
+.topbar{
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: saturate(120%) blur(10px);
+  -webkit-backdrop-filter: saturate(120%) blur(10px);
+  background: var(--glass, rgba(10,11,15,.62));
+  border-bottom: 1px solid var(--glass-bd, #1d1e25);
+  padding: 6px 16px 10px;
+}
+.topbar::after{
+  content:""; position:absolute; left:0; right:0;
+  /* raise the cut slightly and feather it */
+  bottom:-24px; height:24px;
+  background: linear-gradient(
+    to bottom,
+    var(--glass, rgba(10,11,15,.62)) 0%,
+    rgba(16,18,24,.45) 50%,
+    rgba(0,0,0,0) 100%
+  );
+  pointer-events: none;
+}
+.filters{
+  position: sticky; top: 56px; z-index: 40;
+  backdrop-filter: saturate(120%) blur(8px);
+  -webkit-backdrop-filter: saturate(120%) blur(8px);
+  background: var(--glass, rgba(10,11,15,.62));
+  border-bottom: 1px solid var(--glass-bd, #1d1e25);
+  padding: 10px 16px 12px;
+}
+.filters::after{
+  content:""; position:absolute; left:0; right:0;
+  bottom:-26px; height:26px; /* longer feather below filters */
+  background: linear-gradient(
+    to bottom,
+    var(--glass, rgba(10,11,15,.62)) 0%,
+    rgba(16,18,24,.42) 45%,
+    rgba(0,0,0,0) 100%
+  );
+  pointer-events:none;
+}
+
+/* --- Hard-align widths/padding across user bar, header, filters --- */
+.user-bar, .topbar, .filters { padding-left:16px !important; padding-right:16px !important; }
+
+/* --- Workouts / Summary: rectangular, outlined, same grid as filters --- */
+.topbar .nav-tabs{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap: 12px !important;
+}
+.topbar .nav-tabs button,
+.topbar nav button{ /* catch any legacy selector */
+  height: var(--chip-h, 44px) !important;
+  padding: 0 var(--chip-px, 14px) !important;
+  width: 100% !important;
+  border-radius: 12px !important;             /* not pill */
+  border: 1px solid var(--bd-chip, #23242b) !important;
+  background: var(--bg-chip, #0f1015) !important;
+  color: var(--text, #e6e6e6) !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+.topbar .nav-tabs button.active,
+.topbar nav button.active{
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
+  background: transparent !important;
+  color: var(--text) !important;
+}
+
+/* --- Summary period tabs (Week / Month / Year) match the same style --- */
+.period-tabs{
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  gap: 8px !important;
+}
+.period-tabs button{
+  height: var(--chip-h, 44px) !important;
+  padding: 0 var(--chip-px, 14px) !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--bd-chip, #23242b) !important;
+  background: var(--bg-chip, #0f1015) !important;
+  color: var(--text, #e6e6e6) !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+.period-tabs button.active{
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
+  background: transparent !important;
+}
+
+/* --- Misc alignment: make all control buttons full-width inside their grid cells --- */
+.nav-tabs button, .filters button, .filters select { width: 100% !important; }
+
+/* --- Keep outlined vibe elsewhere --- */
+.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
+#sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
+.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
+#flash.show{ background: rgba(var(--accent-r,45), var(--accent-g,212), var(--accent-b,191), 0.35) !important; }
