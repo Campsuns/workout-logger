@@ -94,3 +94,20 @@ menu button{ padding:10px 14px; border-radius:12px; border:1px solid #2a2b32; ba
 .wiz-nav{ display:flex; align-items:center; gap:10px; margin-top:12px; }
 .wiz-nav .sp{ flex:1; }
 #wizSave{ background:#2dd4bf; border-color:#2dd4bf; color:#00322c; border-radius:12px; padding:10px 16px; }
+
+/* Center text vertically in filter controls */
+.filters select{
+  height: 48px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 48px;      /* centers option text */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.filters button{
+  height: 48px;
+  display: inline-flex;
+  align-items: center;    /* vertical center */
+  justify-content: center;
+}
