@@ -202,3 +202,91 @@ body.annie{
   background: transparent;
   color: var(--text);
 }
+
+/* ===== Theme (teal default / pastel purple for Annie) ===== */
+:root{
+  --accent:#2bd2c8;  --accent-r:45;  --accent-g:212; --accent-b:191;
+  --accent-weak: rgba(43,210,200,0.18);
+  --text:#e6e6e6; --bg-chip:#0f1015; --bd-chip:#23242b;
+
+  /* control heights to match your filter controls */
+  --chip-height: 44px;   /* bump for better touch targets */
+  --chip-pad-x: 14px;
+}
+body.annie{
+  --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
+  --accent-weak: rgba(201,167,255,0.20);
+}
+
+/* ===== Camp/Annie bar ABOVE header, same width rhythm as filters ===== */
+.user-bar{
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px; /* breathing space + notch safe area */
+  display:grid; grid-template-columns: 1fr 1fr; gap:12px; width:100%;
+}
+.user-chip{
+  height: var(--chip-height);
+  padding: 0 var(--chip-pad-x);
+  width:100%;
+  border-radius: 12px;              /* rounded rectangle (not pill) */
+  border:1px solid var(--bd-chip);
+  background: var(--bg-chip);
+  color:var(--text);
+  font-weight:600; font-size:14px;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.user-chip.active{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak) inset;
+}
+
+/* ===== Header/nav — make Workouts/Summary match +New/Reset (outlined boxes) ===== */
+.topbar{ padding: 0 16px 8px; }
+.nav-tabs{
+  display:grid; grid-template-columns: 1fr 1fr; gap:12px;
+}
+.nav-tabs button{
+  height: var(--chip-height);
+  padding: 0 var(--chip-pad-x);
+  border-radius: 12px;
+  border:1px solid var(--bd-chip);
+  background: var(--bg-chip);
+  color:var(--text);
+  font-weight:600; font-size:14px;  /* smaller text to fit nicely */
+}
+.nav-tabs button.active{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak) inset;
+  background: transparent;
+  color: var(--text);
+}
+
+/* ===== Summary page tabs (Week/Month/Year) same outlined style ===== */
+.period-tabs{
+  display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;
+}
+.period-tabs button{
+  height: var(--chip-height);
+  padding: 0 var(--chip-pad-x);
+  border-radius: 12px;
+  border:1px solid var(--bd-chip);
+  background: var(--bg-chip);
+  color:var(--text);
+  font-weight:600; font-size:14px;
+}
+.period-tabs button.active{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak) inset;
+  background: transparent;
+}
+
+/* ===== Keep outlined vibe elsewhere ===== */
+.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
+#sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
+.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
+#flash.show{ background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.35) !important; }
+
+/* Align vertical centering like filters and action buttons */
+.filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip, .nav-tabs button, .period-tabs button{
+  display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
+}
+
