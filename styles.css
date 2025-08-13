@@ -125,3 +125,80 @@ menu .sp{ flex:1; }
 
 /* Group headings spacing for equipment sections */
 .subgroup{ margin-bottom:12px; }
+
+/* ==== Theme: teal default (Camp), pastel purple on Annie as OUTLINE, not solid ==== */
+:root{
+  --accent: #2bd2c8; /* teal */
+  --accent-r: 45;    /* for JS heat map fallback if needed */
+  --accent-g: 212;
+  --accent-b: 191;
+  --accent-weak: rgba(43,210,200,0.18);
+
+  --text: #e6e6e6;
+  --bg-chip: #0f1015;
+  --bd-chip: #23242b;
+
+  --chip-height: 36px; /* match Equipment/All height */
+  --chip-pad-x: 14px;
+}
+body.annie{
+  --accent: #c9a7ff;               /* pastel purple outline */
+  --accent-r: 201;
+  --accent-g: 167;
+  --accent-b: 255;
+  --accent-weak: rgba(201,167,255,0.20);
+}
+
+/* ==== User row layout ==== */
+.user-row{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px; /* same breathing room as header/nav */
+}
+
+/* ==== Outlined chips (match + New / Reset outline vibe) ==== */
+.user-chip{
+  height: var(--chip-height);
+  padding: 0 var(--chip-pad-x);
+  border-radius: 999px;
+  border: 1px solid var(--bd-chip);
+  background: var(--bg-chip);
+  color: var(--text);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.user-chip.active{
+  border-color: var(--accent);          /* outline only */
+  box-shadow: 0 0 0 2px var(--accent-weak) inset;
+}
+
+/* Use the theme for other accents BUT keep your outline/soft look */
+#sideSeg button.active{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak) inset;
+  background: transparent;              /* no solid fills */
+  color: var(--text);
+}
+.pill.repsets{
+  border: 1px solid var(--accent);
+  background: transparent;              /* keep it outlined */
+  color: var(--text);
+}
+.card.done{
+  outline: 2px solid var(--accent);     /* highlight after logging */
+  outline-offset: -2px;
+}
+
+/* Flash overlay uses theme color but dimmed to keep it classy */
+#flash.show{
+  background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.35) !important;
+}
+
+/* Center/nudge text so it matches filter controls and + New / Reset */
+.filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip{
+  display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
+}
+
