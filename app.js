@@ -200,11 +200,7 @@ async function fetchAll(){
   state.logs      = data.logs||[];
   state.users     = (data.users && data.users.length) ? data.users : [{user_id:'u_camp',name:'Camp'},{user_id:'u_annie',name:'Annie'}];
   state.byId      = Object.fromEntries(state.exercises.map(e=>[e.id, e]));
-  // OLD:
-// renderUserSwitcher();
-
-// NEW:
-  renderUserTabs();
+  renderUserSwitcher();
   renderFilters();
   renderList();
   renderSummary();
@@ -241,34 +237,6 @@ $('.period-tabs')?.querySelectorAll('button').forEach(btn=>{
     renderSummary();
   });
 });
-
-function renderUserTabs(){
-  const wrap = document.querySelector('#userTabs');
-  if(!wrap) return;
-
-  // If Users sheet names are present, reflect them on the chips
-  const byId = Object.fromEntries((state.users||[]).map(u=>[u.user_id, u.name]));
-  wrap.querySelectorAll('[data-user]').forEach(btn=>{
-    const uid = btn.dataset.user;
-    if(byId[uid]) btn.textContent = byId[uid];
-  });
-
-  // Set active state + click handlers
-  wrap.querySelectorAll('[data-user]').forEach(btn=>{
-    const uid = btn.dataset.user;
-    btn.classList.toggle('active', state.userId === uid);
-    btn.onclick = ()=>{
-      state.userId = uid;
-      store.set({ userId: uid });
-      document.body.classList.toggle('annie', uid === 'u_annie');  // theme switch
-      renderList();
-      renderSummary();
-    };
-  });
-
-  // Apply theme on first render too
-  document.body.classList.toggle('annie', state.userId === 'u_annie');
-}
 
 // ==== Filters ====
 function renderFilters(){
