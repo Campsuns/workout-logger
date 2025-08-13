@@ -495,3 +495,108 @@ body.annie{
 #sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
 .card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
 #flash.show{ background: rgba(var(--accent-r,45), var(--accent-g,212), var(--accent-b,191), 0.35) !important; }
+
+/* ============== FINAL ALIGNMENT + STYLE FIXES ============== */
+
+/* 1) Header = two-column grid so nav pills align with filters below */
+.topbar{
+  display:grid !important;
+  grid-template-columns: 1fr 1fr !important;  /* brand | nav (matches filter columns) */
+  align-items:center !important;
+  column-gap:12px !important;
+  padding: 8px 16px 10px !important;
+  position: sticky; top:0; z-index:50;
+  backdrop-filter: saturate(120%) blur(10px);
+  -webkit-backdrop-filter: saturate(120%) blur(10px);
+  background: var(--glass, rgba(10,11,15,.62));
+  border-bottom: 1px solid var(--glass-bd, #1d1e25);
+}
+.topbar::after{
+  content:""; position:absolute; left:0; right:0; bottom:-22px; height:22px;
+  background: linear-gradient(var(--glass, rgba(10,11,15,.62)), rgba(0,0,0,0));
+  pointer-events:none;
+}
+
+/* 2) Brand on the left, bold */
+.topbar .brand{
+  grid-column: 1 / 2;
+  font-weight: 800; letter-spacing: .2px;
+}
+
+/* 3) Workouts/Summary on the right, side-by-side, dotted outline like +New/Reset */
+.topbar .nav-tabs{
+  grid-column: 2 / 3;
+  display:grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap:12px !important;
+  width:100% !important;
+}
+.topbar .nav-tabs button,
+.topbar nav button{ /* catch any legacy selector */
+  height: 40px !important;                  /* match +New/Reset */
+  padding: 0 14px !important;
+  width: 100% !important;
+  border-radius: 12px !important;           /* rounded-rect (not pill) */
+  border: 1px dotted var(--bd-chip, #23242b) !important;  /* dotted outline */
+  background: var(--bg-chip, #0f1015) !important;
+  color: var(--text, #e6e6e6) !important;
+  font-weight: 700 !important;              /* stronger label like header controls */
+  font-size: 13px !important;               /* slightly smaller so it fits nicely */
+  box-shadow: none !important;
+}
+.topbar .nav-tabs button.active,
+.topbar nav button.active{
+  border-color: var(--accent) !important;                 /* teal/purple */
+  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  /* keep dotted when active too */
+  border-style: dotted !important;
+}
+
+/* 4) Filters keep same two-column rhythm, with feather fade below */
+.filters{
+  position: sticky; top: 56px; z-index: 40;
+  padding: 10px 16px 12px;
+  backdrop-filter: saturate(120%) blur(8px);
+  -webkit-backdrop-filter: saturate(120%) blur(8px);
+  background: var(--glass, rgba(10,11,15,.62));
+  border-bottom: 1px solid var(--glass-bd, #1d1e25);
+}
+.filters::after{
+  content:""; position:absolute; left:0; right:0; bottom:-24px; height:24px;
+  background: linear-gradient(var(--glass, rgba(10,11,15,.62)), rgba(0,0,0,0));
+  pointer-events:none;
+}
+
+/* 5) Make sure all control rows share the same side padding */
+.user-bar, .topbar, .filters { padding-left:16px !important; padding-right:16px !important; }
+
+/* 6) Period tabs on Summary also use dotted outline + theme color */
+.period-tabs{
+  display:grid !important;
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  gap:8px !important;
+}
+.period-tabs button{
+  height: 40px !important;
+  padding: 0 14px !important;
+  border-radius: 12px !important;
+  border: 1px dotted var(--bd-chip, #23242b) !important;
+  background: var(--bg-chip, #0f1015) !important;
+  color: var(--text, #e6e6e6) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+.period-tabs button.active{
+  border-color: var(--accent) !important;
+  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
+}
+
+/* 7) Keep other accents outlined & on-theme */
+.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
+#sideSeg button.active{ border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent-weak); background:transparent; color:var(--text); }
+.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
+#flash.show{ background: rgba(var(--accent-r,45), var(--accent-g,212), var(--accent-b,191), .35) !important; }
+
+
