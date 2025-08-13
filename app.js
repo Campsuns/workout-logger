@@ -16,6 +16,16 @@ const $ = (q, root=document)=>root.querySelector(q);
 const $$ = (q, root=document)=>Array.from(root.querySelectorAll(q));
 const flash = ()=>{ const f=$('#flash'); if(!f) return; f.classList.remove('show'); void f.offsetWidth; f.classList.add('show'); };
 const toast = (msg)=>{ const t=$('#toast'); t.textContent=msg; t.hidden=false; setTimeout(()=>t.hidden=true, 1800); };
+
+function equipDisplay(lbl){
+  const s = String(lbl || '').trim();
+  if(!s) return 'Other';
+  return s
+    .replace(/\b\w/g, c => c.toUpperCase())    // title case
+    .replace(/\bEz\b/g,'EZ')
+    .replace(/\bV Bar\b/g,'V-Bar');
+}
+
 function fmt(num){ return Number(num||0).toFixed(0); }
 function today(){ const d=new Date(); return d.toISOString().slice(0,10); }
 function startOfPeriod(period){ const d=new Date(); if(period==='week'){ const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; } if(period==='month'){ return new Date(d.getFullYear(), d.getMonth(), 1); } if(period==='year'){ return new Date(d.getFullYear(), 0, 1); } }
@@ -138,32 +148,66 @@ function renderList(){
   // Muscle filter (exact match on Title Case label)
   if(mgVal) items = items.filter(e=>musclesOf(e).includes(mgVal));
 
+  // Helper: render groups by equipment
+  const groupByEquipment = (arr) => {
+    const map = new Map();
+    for(const e of arr){
+      const key = equipDisplay(e.equipment || '');
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
+    }
+    const keys = [...map.keys()].sort((a,b)=>a.localeCompare(b));
+    return keys.map(k => `
+      <div class="subgroup">
+        <div class="group-title">${k}</div>
+        <div class="cards">
+          ${map.get(k).map(makeCardHTML).join('')}
+        </div>
+      </div>
+    `).join('');
+  };
+
+  // With a selected split: keep the split section at top
   if(state.currentSplit){
-    // Build list for selected split (ordered) + the rest
     const splitRows = state.splits
       .filter(s=>String(s.split_name||'')===state.currentSplit)
       .sort((a,b)=>Number(a.order||0)-Number(b.order||0));
-
     const splitIds = splitRows.map(r=>r.exercise_id);
+
     const top  = splitIds.map(id=>items.find(e=>e.id===id)).filter(Boolean);
     const rest = items.filter(e=>!splitIds.includes(e.id));
 
-    wrapSel.hidden = false;                         // ✅ JS booleans
+    // Selected split section
+    wrapSel.hidden = false;
     listSel.innerHTML = top.map(makeCardHTML).join('');
-    otherTitle.hidden = false;                      // ✅ JS booleans
-    otherList.innerHTML = rest.map(makeCardHTML).join('');
+
+    // Others: if NO filters, group by equipment; otherwise flat list
+    if(!eqVal && !mgVal){
+      otherTitle.hidden = false;
+      otherList.innerHTML = groupByEquipment(rest);
+    } else {
+      otherTitle.hidden = false;
+      otherList.innerHTML = rest.map(makeCardHTML).join('');
+    }
   } else {
-    wrapSel.hidden = true;                          // ✅ JS booleans
-    otherTitle.hidden = true;                       // ✅ JS booleans
-    otherList.innerHTML = items.map(makeCardHTML).join('');
+    // No split selected
+    wrapSel.hidden = true;
+    otherTitle.hidden = true;
+
+    // If NO filters, group all items by equipment; otherwise flat list
+    if(!eqVal && !mgVal){
+      otherList.innerHTML = groupByEquipment(items);
+    } else {
+      otherList.innerHTML = items.map(makeCardHTML).join('');
+    }
   }
 
-  // Attach click handlers
+  // Click handlers
   $$('#workoutList .card, #selectedSplitList .card').forEach(c=>{
     c.addEventListener('click',()=>openLog(c.dataset.id));
   });
 
-  // If nothing shows due to a stale persisted filter, hint visually
+  // Empty state hint
   if(!items.length){
     otherList.innerHTML = `<div class="meta" style="padding:8px 4px;">No exercises match the current filters.</div>`;
   }
