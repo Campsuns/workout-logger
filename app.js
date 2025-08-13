@@ -535,7 +535,7 @@ function renderSummary(){
   // focus %
   const pct = musclePercents(period);
   const entries = Object.entries(pct).sort((a,b)=>b[1]-a[1]);
-  const top = entries.slice(0,3);
+  const top = entries.slice(0,7);
   const neglected = entries.slice(-5);
 
   // most improved
@@ -580,8 +580,7 @@ function renderSummary(){
       <div>
         <div style="margin-bottom:8px; font-weight:700">Top Focus</div>
         ${top.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
-        <div style="margin:12px 0 8px; font-weight:700">Most Neglected</div>
-        ${neglected.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
+        
       </div>
     </div>
   </div>
@@ -591,7 +590,7 @@ function renderSummary(){
     ${imp.length ? '<ol>'+imp.map(x=>`<li>${state.byId[x.id]?.name||x.id}: +${x.delta.toFixed(1)}</li>`).join('')+'</ol>' : '<div class="meta">No data yet</div>'}
   </div>`;
 
-  const color = (v)=>heat(Math.max(0,Math.min(100,v||0)));
+  const color = (v)=>heat(Math.max(0,Math.min(100,(v||0))));
   const set = (id,m)=>{ const el=$('#'+id); if(el) el.style.fill = color(pct[m]); };
 
   set('Back','Back'); set('Trap','Trapezius');
@@ -976,3 +975,181 @@ async function submitLog(skip){
     })
     .catch(()=>{ rollback(); toast('Network error'); });
 }
+
+
+// ===== v15 — Summary polish, consistency bar, stronger progression, suggestions =====
+function _isoDate(val){
+  if (typeof val==='string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  const d = new Date(val);
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function _mondayOf(d){ const x=new Date(d); x.setDate(d.getDate()-((d.getDay()+6)%7)); x.setHours(0,0,0,0); return x; }
+function _addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+
+function daysThisWeekFlags(){
+  const logs = logsForUser();
+  const mon = _mondayOf(new Date());
+  const end = _addDays(mon,6);
+  const days = new Set();
+  for(const l of logs){
+    const ds = _isoDate(l.date||l.timestamp);
+    const dt = new Date(ds+'T12:00:00');
+    if(dt>=mon && dt<=end) days.add(ds);
+  }
+  const flags = [];
+  for(let i=0;i<7;i++){ const ds=_isoDate(_addDays(mon,i)); flags.push(days.has(ds)); }
+  return { count: days.size, flags };
+}
+
+function computeNextFromPerformance(last, ex){
+  const min=CONFIG.REP_MIN, max=CONFIG.REP_MAX;
+  let reps = Number(last.planned_reps||8);
+  let wt   = Number(last.weight_lb||ex?.default_weight||0);
+  const fail = Number(last.fail_reps || reps);
+  const rpe  = Number(last.rpe_set2 || 8);
+  if (fail - reps >= 3) reps += 3;
+  else if (fail - reps >= 2) reps += 2;
+  else if (fail - reps >= 1) reps += 1;
+  else if (fail <= reps - 2 || rpe >= 9) reps -= 1;
+  reps = Math.max(min, Math.min(max, reps));
+  if (reps === max){
+    if (fail >= 14 || rpe <= 6) { wt += 10; reps = 8; }
+    else if (fail >= 13 || rpe <= 7) { wt += 5; reps = 8; }
+  }
+  if (reps === min && (fail < min || rpe >= 9)){ wt = Math.max(0, wt - CONFIG.DEFAULT_INC_LB); }
+  return { weight: wt, reps };
+}
+(function(){
+  if (typeof suggestNext === 'function'){
+    const _base = suggestNext;
+    suggestNext = function(exId, side){
+      const base = _base(exId, side) || {};
+      try{
+        const last = latestFor(exId, side);
+        if (last){
+          const ex = state.byId[exId];
+          const adv = computeNextFromPerformance(last, ex);
+          base.weight = adv.weight;
+          base.reps   = adv.reps;
+        }
+      }catch(_){}
+      return base;
+    };
+  }
+})();
+
+function _musclesOf(e){ return [e.primary,e.secondary,e.tertiary].filter(Boolean); }
+function suggestWorkoutsV15(count=5){
+  const start = startOfPeriod(state.period||'week');
+  const exById = new Map(state.exercises.map(e=>[e.id,e]));
+  const logsP  = logsForUser().filter(l=> new Date(l.date||l.timestamp) >= start);
+  const score = new Map(); const add=(m,p)=>{ if(!m) return; score.set(m,(score.get(m)||0)+p); };
+  for(const l of logsP){ const ex=exById.get(l.exercise_id); if(!ex) continue; add(ex.primary,3); add(ex.secondary,2); add(ex.tertiary,1); }
+  const musSet=new Set(); exercisesForUser().forEach(e=>_musclesOf(e).forEach(m=>m&&musSet.add(m)));
+  const neglected=[...musSet].map(m=>({m,pts:score.get(m)||0})).sort((a,b)=>a.pts-b.pts).slice(0,3).map(x=>x.m);
+  const recent=new Map(); for(const l of logsForUser()){ const ds=_isoDate(l.date||l.timestamp); if(!recent.has(l.exercise_id) || ds>recent.get(l.exercise_id)) recent.set(l.exercise_id, ds); }
+  const today=_isoDate(new Date());
+  const ranked=[];
+  for(const e of exercisesForUser()){
+    let match=0;
+    if(neglected.includes(e.primary)) match+=3;
+    if(neglected.includes(e.secondary)) match+=2;
+    if(neglected.includes(e.tertiary)) match+=1;
+    if(!match) continue;
+    const last=recent.get(e.id); let penalty=0;
+    if(last){ const days=(new Date(today)-new Date(last))/(1000*60*60*24); if(days<=3) penalty=3-days; }
+    ranked.push({e,score:match-penalty});
+  }
+  ranked.sort((a,b)=> b.score-a.score || a.e.name.localeCompare(b.e.name));
+  return ranked.slice(0,count).map(x=>x.e);
+}
+function applySuggestionHighlightV15(){
+  if(!state || !state.suggestIds) return;
+  document.querySelectorAll('.card[data-id]').forEach(c=>{
+    c.classList.toggle('suggested', state.suggestIds.has(c.getAttribute('data-id')));
+  });
+}
+function recomputeSuggestionsV15(){
+  try{
+    const picks = suggestWorkoutsV15(5);
+    state.suggestIds = new Set(picks.map(p=>p.id));
+    applySuggestionHighlightV15();
+    const s = document.getElementById('suggestWrap');
+    if(s){
+      s.innerHTML = '<h3>Suggested Workouts (today)</h3>' + (picks.length ?
+        '<div class="suggest-list">' + picks.map(p=>`<div class="suggest-item"><span class="name">${p.name}${p.variation? ' • '+p.variation:''}</span><span class="suggest-tag">Suggested</span></div>`).join('') :
+        '<div class="meta">No suggestions yet.</div>');
+    }
+  }catch(_){}
+}
+(function(){
+  if(typeof fetchAll==='function'){
+    const _f=fetchAll;
+    fetchAll = async function(){
+      const r=await _f.apply(this, arguments);
+      setTimeout(recomputeSuggestionsV15, 0);
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', ()=> setTimeout(recomputeSuggestionsV15, 250));
+  const _render = (typeof renderList==='function' && renderList) || (typeof renderExercises==='function' && renderExercises) || null;
+  if(_render){
+    const wrap=function(){ _render.apply(this, arguments); applySuggestionHighlightV15(); };
+    if(typeof renderList!=='undefined') renderList=wrap; else if(typeof renderExercises!=='undefined') renderExercises=wrap;
+  }
+})();
+
+const _prevRenderSummary = (typeof renderSummary==='function' ? renderSummary : null);
+renderSummary = function(){
+  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===state.page));
+  const el = document.getElementById('summaryContent');
+  if(!el){ if(_prevRenderSummary) _prevRenderSummary(); return; }
+
+  const st = (typeof streaks==='function' ? streaks() : {current:0,best:0,perfectWeeks:0});
+  const weekFlags = daysThisWeekFlags();
+  const pct = (typeof musclePercents==='function' ? musclePercents(state.period) : {});
+  const entries = Object.entries(pct).sort((a,b)=>b[1]-a[1]);
+  const top = entries.slice(0,7);
+  const neglected = entries.slice(-5);
+  const imp = (typeof rankImprovements==='function' ? rankImprovements(state.period).slice(0,5) : []);
+
+  el.innerHTML = `
+    <section class="summary-card" id="streakCard">
+      <h3>Streaks</h3>
+      <div>Current: <b>${st.current}</b> weeks</div>
+      <div>Best: <b>${st.best}</b> weeks</div>
+      <div>Perfect weeks: <b>${st.perfectWeeks}</b></div>
+      <div>Days this week: <b>${weekFlags.count}</b></div>
+      <div class="consistency">${weekFlags.flags.map(f=>`<div class="dot${f?' on':''}"></div>`).join('')}</div>
+    </section>
+
+    <section class="summary-card" id="focusCard">
+      <h3>Muscle Focus (${state.period})</h3>
+      <div style="display:grid; grid-template-columns:160px 1fr; gap:12px;">
+        <div id="miniMap" style="width:160px;height:220px;border:1px solid var(--line);border-radius:12px;background:#0f1015;"></div>
+        <div>
+          <div style="margin-bottom:8px;font-weight:700">Top Focus</div>
+          ${top.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
+          <div style="margin:12px 0 8px;font-weight:700">Most Neglected</div>
+          ${neglected.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
+        </div>
+      </div>
+    </section>
+
+    <section class="summary-card" id="improvedCard">
+      <h3>Most Improved (${state.period})</h3>
+      ${imp.length ? '<ol>'+imp.map(x=>`<li>${state.byId[x.id]?.name||x.id}: +${x.delta.toFixed(1)}</li>`).join('')+'</ol>' : '<div class="meta">No data yet</div>'}
+    </section>
+
+    <section class="summary-card" id="suggestWrap">
+      <h3>Suggested Workouts (today)</h3>
+      <div class="meta">Computing…</div>
+    </section>
+  `;
+
+  // Color the minimap if an existing painter exists; otherwise noop
+  if (typeof paintMiniMap==='function') {
+    paintMiniMap('miniMap', pct);
+  }
+  recomputeSuggestionsV15();
+};

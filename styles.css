@@ -171,7 +171,7 @@ menu button{ height:var(--chip-h); padding:0 var(--chip-px); border-radius:var(-
 #btnLog{ background:var(--accent); border:1px solid var(--accent); color:#062822; font-weight:800; }
 
 /* SUMMARY period tabs */
-.period-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 16px; position:sticky; top:56px; }
+.period-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:10px 16px; position:sticky; top:56px; background:var(--glass); border-bottom:1px solid var(--glass-bd);}
 .period-tabs button{
   height:var(--chip-h); padding:0 var(--chip-px);
   background:var(--soft); color:var(--fg);
@@ -232,3 +232,40 @@ button.ghost:focus-visible {
   border-color: var(--accent) !important;
   box-shadow: inset 0 0 0 2px var(--accent-weak), 0 0 0 2px rgba(0,0,0,0) !important;
 }
+
+
+/* === v15 Summary cards & consistency === */
+.summary-card{
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin: 12px 0;
+}
+.summary-card h3{ margin: 0 0 8px 0; font-weight: 700; }
+
+.consistency{ display:flex; gap:8px; margin-top:6px; }
+.consistency .dot{ width:12px; height:12px; border-radius:4px; background: rgba(255,255,255,0.12); }
+.consistency .dot.on{ background: var(--accent); }
+
+/* Nudge Summary content below sticky tabs */
+body[data-page="summary"] #summaryContent{ padding-top: 8px; }
+
+/* Suggested workouts styles */
+:root{ --suggest:#f5d061; }
+.card.suggested{ outline: 2px dashed var(--suggest); outline-offset: -2px; }
+.card.suggested .repsets{ border-color: var(--suggest); color: var(--suggest); }
+.suggest-list{ display:flex; flex-direction:column; gap:8px; }
+.suggest-item{ display:flex; align-items:center; gap:8px; }
+.suggest-item .name{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.suggest-tag{ font-size:11px; padding:2px 8px; border-radius:999px; border:1px dashed var(--suggest); color:var(--suggest); }
+
+
+/* v16b summary spacing + smaller type */
+body[data-page="summary"] #summaryContent{ padding-top: 14px; }
+#page-summary .summary h4{ font-size: 14px; line-height: 18px; }
+#page-summary .summary, #page-summary .summary div, #page-summary .summary li{ font-size: 13px; line-height: 1.45; }
+
+/* more breathing room around map text */
+#mapWrap{ gap: 16px !important; }
+#mapWrap > div:last-child{ padding-left: 2px; }
