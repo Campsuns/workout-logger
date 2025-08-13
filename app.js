@@ -344,36 +344,36 @@ function renderUserChips(){
   const row = document.querySelector('#userRow');
   if(!row) return;
 
-  // If Users sheet returns names, reflect them (fallback to labels already in HTML)
-  const byId = Object.fromEntries((state.users||[]).map(u=>[u.user_id, u.name]));
-  row.querySelectorAll('.user-chip').forEach(btn=>{
+  // If Users sheet provides names, reflect them (fallback to labels already in HTML)
+  const byId = Object.fromEntries((state.users||[]).map(u => [u.user_id, u.name]));
+  row.querySelectorAll('.user-chip').forEach(btn => {
     const uid = btn.dataset.user;
     if (byId[uid]) btn.textContent = byId[uid];
   });
 
-  // Active state
-  row.querySelectorAll('.user-chip').forEach(btn=>{
+  // Active state + click
+  row.querySelectorAll('.user-chip').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.user === state.userId);
-    btn.onclick = ()=>{
+    btn.onclick = () => {
       state.userId = btn.dataset.user;
       store.set({ userId: state.userId });
 
-      // swap theme (Annie → pastel purple)
+      // Theme swap
       document.body.classList.toggle('annie', state.userId === 'u_annie');
 
-      // refresh UI
       renderList();
       renderSummary();
 
-      // toggle active classes
-      row.querySelectorAll('.user-chip').forEach(b=>b.classList.remove('active'));
+      // Update chip highlighting
+      row.querySelectorAll('.user-chip').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     };
   });
 
-  // Apply theme on boot, too
+  // Apply theme on first render too
   document.body.classList.toggle('annie', state.userId === 'u_annie');
 }
+
 
 
 // ==== Log modal ====
