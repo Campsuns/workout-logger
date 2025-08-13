@@ -111,3 +111,10 @@ menu button{ padding:10px 14px; border-radius:12px; border:1px solid #2a2b32; ba
   align-items: center;    /* vertical center */
   justify-content: center;
 }
+
+/* Nudge filter text UP a couple pixels (selects + buttons) */
+.filters select,
+.filters button {
+  /* keep your existing height/line-height rules */
+  transform: translateY(-2px);  /* try -3; tweak to -3 if you want a bit more */
+}
