@@ -200,7 +200,7 @@ async function fetchAll(){
   state.logs      = data.logs||[];
   state.users     = (data.users && data.users.length) ? data.users : [{user_id:'u_camp',name:'Camp'},{user_id:'u_annie',name:'Annie'}];
   state.byId      = Object.fromEntries(state.exercises.map(e=>[e.id, e]));
-  renderUserSwitcher();
+  renderUserChips();
   renderFilters();
   renderList();
   renderSummary();
@@ -339,6 +339,42 @@ function renderList(){
     otherList.innerHTML = `<div class="meta" style="padding:8px 4px;">No exercises match the current filters.</div>`;
   }
 }
+
+function renderUserChips(){
+  const row = document.querySelector('#userRow');
+  if(!row) return;
+
+  // If Users sheet returns names, reflect them (fallback to labels already in HTML)
+  const byId = Object.fromEntries((state.users||[]).map(u=>[u.user_id, u.name]));
+  row.querySelectorAll('.user-chip').forEach(btn=>{
+    const uid = btn.dataset.user;
+    if (byId[uid]) btn.textContent = byId[uid];
+  });
+
+  // Active state
+  row.querySelectorAll('.user-chip').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.user === state.userId);
+    btn.onclick = ()=>{
+      state.userId = btn.dataset.user;
+      store.set({ userId: state.userId });
+
+      // swap theme (Annie → pastel purple)
+      document.body.classList.toggle('annie', state.userId === 'u_annie');
+
+      // refresh UI
+      renderList();
+      renderSummary();
+
+      // toggle active classes
+      row.querySelectorAll('.user-chip').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+
+  // Apply theme on boot, too
+  document.body.classList.toggle('annie', state.userId === 'u_annie');
+}
+
 
 // ==== Log modal ====
 let modal, stepVals, curEx;
@@ -497,7 +533,16 @@ function musclePercents(period){
   const pct={}; MUSCLE_LIST.forEach(m=>pct[m]=Math.round(100*(score.get(m)||0)/total));
   return pct;
 }
-function heat(c){ return `rgba(45,212,191,${0.12+0.88*(c/100)})`; }
+function heat(pct){
+  // pct is 0–100; base color from CSS theme (teal vs pastel purple)
+  const cs = getComputedStyle(document.body);
+  const r = Number(cs.getPropertyValue('--accent-r') || 45);
+  const g = Number(cs.getPropertyValue('--accent-g') || 212);
+  const b = Number(cs.getPropertyValue('--accent-b') || 191);
+  const alpha = 0.12 + 0.88 * (pct/100);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 
 function renderSummary(){
   const wrap=$('#summaryContent'); const period=state.period;
