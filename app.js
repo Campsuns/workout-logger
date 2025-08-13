@@ -25,7 +25,20 @@ function musclesOf(e){ return [e.primary, e.secondary, e.tertiary].filter(Boolea
 function uniqueMuscles(list){ return [...new Set(list.flatMap(musclesOf).filter(Boolean))].sort(); }
 function markDone(exId){ const map = JSON.parse(localStorage.getItem('doneMap')||'{}'); map[exId] = Date.now(); localStorage.setItem('doneMap', JSON.stringify(map)); }
 function isDone(exId){ const map = JSON.parse(localStorage.getItem('doneMap')||'{}'); const ts = map[exId]; if(!ts) return false; const ageH = (Date.now()-ts)/(1000*60*60); return ageH < CONFIG.DONE_TTL_HOURS; }
-function latestFor(exId, side){ const exLogs = state.logs.filter(l=>l.exercise_id===exId && (l.side||'both') === (side||'both')); if(!exLogs.length) return null; exLogs.sort((a,b)=> new Date(b.date||b.timestamp) - new Date(a.date||a.timestamp)); return exLogs[0]; }
+
+function latestFor(exId, side){
+  const want = String(side || 'both').toLowerCase();
+  const logs = state.logs.filter(l => l.exercise_id === exId);
+  if (!logs.length) return null;
+
+  const norm = x => String(x || 'both').toLowerCase();
+  const bySide = logs.filter(l => norm(l.side) === want);
+
+  const arr = bySide.length ? bySide : logs; // fallback: any side
+  arr.sort((a,b) => new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date));
+  return arr[0] || null;
+}
+
 function chooseSide(exId){ const s = JSON.parse(localStorage.getItem('lastSide')||'{}'); return s[exId] || 'both'; }
 function saveSide(exId, side){ const s = JSON.parse(localStorage.getItem('lastSide')||'{}'); s[exId]=side; localStorage.setItem('lastSide', JSON.stringify(s)); }
 function suggestNext(exId, side){ const ex = state.byId[exId]; if(!ex) return {weight:0, reps:8, sets:3, height:0}; const last = latestFor(exId, side) || latestFor(exId, 'both') || latestFor(exId, null); const inc = Number(ex.increment_lb||CONFIG.DEFAULT_INC_LB||5); const minr=CONFIG.REP_MIN, maxr=CONFIG.REP_MAX; let nextW = Number(last?.weight_lb || ex.default_weight || 0); let nextR = Number(last?.planned_reps || Math.max(minr,8)); const fail = (last?.fail_reps!=null && last?.fail_reps!=='') ? Number(last.fail_reps) : null; const rpe = Number(last?.rpe_set2 || 8); if(fail!==null){ if(fail >= nextR && rpe <= 8){ nextR = nextR + 1; if(nextR > maxr){ nextW += inc; nextR = 8; } } else if(fail < nextR - 1 || rpe >= 9){ if(nextR > minr){ nextR = Math.max(minr, Math.min(fail || nextR-1, nextR-1)); } else { nextW = Math.max(0, nextW - inc); nextR = Math.max(minr, 8); } } } else { if(rpe <= 7.5){ nextR = Math.min(maxr, nextR+1); if(nextR>maxr){ nextW+=inc; nextR=8; } } else if(rpe >= 9){ nextR = Math.max(minr, nextR-1); } } return {weight: Math.max(0, Math.round(nextW)), reps: nextR, sets: Number(ex.sets||3), height: Number(last?.height || ex.default_height || 0)}; }
