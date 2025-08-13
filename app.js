@@ -84,8 +84,28 @@ function renderFilters(){
   $('#btnResetDone').onclick = ()=>{ localStorage.removeItem('doneMap'); renderList(); toast('Highlights reset'); };
 }
 
+function makeCardHTML(e){
+  const sugg = suggestNext(e.id, chooseSide(e.id));
+  const variation = e.variation ? `<span class="variation">• ${e.variation}</span>` : '';
+  const equip = e.equipment ? e.equipment : '';
+  const h = Number(e.default_height || 0);
+  const setupLine = [equip, (h>0 ? `Height ${fmt(h)}` : '')].filter(Boolean).join(' • ');
+  const done = isDone(e.id);
 
-function makeCardHTML(e){ const sugg = suggestNext(e.id, chooseSide(e.id)); const subSetup = [e.equipment, (sugg.height>0 ? `Height ${fmt(sugg.height)}` : '')].filter(Boolean).join(' • '); const subPlan = `${fmt(sugg.reps)} reps × ${fmt(sugg.sets)}`; const done = isDone(e.id); return `<div class="card ${done?'done':''}" data-id="${e.id}"><div><div class="name">${e.name}</div><div class="meta">${subSetup||' '}</div><div class="plan">${subPlan}</div></div><div class="pill">${fmt(sugg.weight)} lb</div></div>`; }
+  // Left: 3 lines (name+variation, equipment+default height, weight)
+  // Right pill: reps × sets
+  return `
+  <div class="card ${done?'done':''}" data-id="${e.id}">
+    <div class="left">
+      <div class="name-line">
+        <span class="name">${e.name}</span>${variation}
+      </div>
+      <div class="meta line">${setupLine || '&nbsp;'}</div>
+      <div class="weight line">${fmt(sugg.weight)} lb</div>
+    </div>
+    <div class="pill repsets" aria-label="Reps × Sets">${fmt(sugg.reps)} × ${fmt(sugg.sets)}</div>
+  </div>`;
+}
 
 function renderList(){
   const eqVal = (state.eq||'').toLowerCase();
