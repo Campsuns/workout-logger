@@ -1,78 +1,157 @@
-:root{ --bg:#0b0b0c; --fg:#fff; --muted:#a0a0a8; --card:#111216; --acc:#2dd4bf; --soft:#1a1b21; --flash:#1dbf9f; }
+/* ===============================================================
+   Workout Logger — UI polish + data-scoped themes
+   =============================================================== */
+
+/* ---- Base palette & theme ---- */
+:root{
+  --bg:#0b0b0c;
+  --fg:#ffffff;
+  --muted:#a0a0a8;
+  --soft:#15161b;
+  --card:#111216;
+  --line:#23242b;
+  --glass: rgba(10,11,15,0.62);
+  --glass-bd:#1d1e25;
+
+  --accent:#2bd2c8;  --accent-r:45; --accent-g:212; --accent-b:191;
+  --accent-weak: rgba(43,210,200,0.20);
+
+  --chip-h:40px; --chip-px:14px; --radius:12px;
+}
+body.annie{
+  --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
+  --accent-weak: rgba(201,167,255,0.22);
+}
+
+/* Resets */
 *{ box-sizing:border-box; }
-html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-#flash{ position:fixed; inset:0; background:var(--flash); opacity:0; pointer-events:none; }
+html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+}
+
+/* Flash */
+#flash{ position:fixed; inset:0; background:rgba(var(--accent-r),var(--accent-g),var(--accent-b),.35); opacity:0; pointer-events:none; }
 #flash.show{ animation: flash 650ms ease-in-out; }
 @keyframes flash{ 0%{opacity:0;} 20%{opacity:.22;} 100%{opacity:0;} }
-.topbar{ position:sticky; top:0; z-index:10; background:linear-gradient(180deg,#0b0b0c,#0b0b0cdd 60%,transparent); display:flex; align-items:center; justify-content:space-between; padding:12px 16px; backdrop-filter: blur(8px); }
-.topbar .brand{ font-weight:700; letter-spacing:.3px; }
-.topbar nav button{ background:#15161b; border:1px solid #23242b; color:#ddd; border-radius:999px; padding:8px 12px; margin-left:8px; }
-.topbar nav button.active{ border-color:var(--acc); color:#fff; }
-main{ padding:12px; }
-.filters{ display:grid; grid-template-columns:1fr 1fr; gap:10px; position:sticky; top:52px; padding:10px 0; background:var(--bg); }
-.filters select, .filters button{ width:100%; height:48px; border-radius:14px; }
-.filters .btnrow{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-@media (min-width: 640px){ .filters{ grid-template-columns: 1fr 1fr 1fr 1fr; } }
-select, button, textarea, input{ font:inherit; }
-select, input{ width:100%; padding:12px; background:#15161b; color:#fff; border:1px solid #23242b; border-radius:12px; }
+
+/* USER BAR */
+.user-bar{
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+  display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%;
+}
+.user-chip{
+  height:var(--chip-h); padding:0 var(--chip-px); width:100%;
+  background:var(--soft); color:var(--fg);
+  border:1px solid var(--line); border-radius:var(--radius);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:13px;
+}
+.user-chip.active{
+  border-color:var(--accent);
+  box-shadow:inset 0 0 0 2px var(--accent-weak);
+}
+
+/* HEADER (frosted + feather) */
+.topbar{
+  display:grid; grid-template-columns:1fr 1fr; align-items:center; column-gap:12px;
+  position:sticky; top:0; z-index:50;
+  padding:6px 16px 10px;
+  background:var(--glass);
+  border-bottom:1px solid var(--glass-bd);
+  backdrop-filter:saturate(120%) blur(13px);
+  -webkit-backdrop-filter:saturate(120%) blur(13px);
+}
+.topbar::after{
+  content:""; position:absolute; left:0; right:0; bottom:-22px; height:22px;
+  background:linear-gradient(var(--glass), rgba(0,0,0,0));
+  pointer-events:none;
+}
+.topbar .brand{
+  grid-column:1/2;
+  font-weight:700; letter-spacing:.25px; font-size:18px;
+  transform: translateY(-2px);
+}
+
+/* NAV (Workouts/Summary) — dashed chips to match +New/Reset */
+.nav-tabs{
+  grid-column:2/3;
+  display:grid; grid-template-columns:1fr 1fr; gap:12px;
+}
+.nav-tabs button{
+  height:var(--chip-h); padding:0 var(--chip-px); width:100%;
+  background:var(--soft); color:var(--fg);
+  border:1px dashed var(--line); border-radius:var(--radius);
+  font-weight:700; font-size:13px;
+}
+.nav-tabs button.active{
+  border-color:var(--accent);
+  box-shadow:inset 0 0 0 2px var(--accent-weak);
+  background:transparent; color:var(--fg);
+}
+
+/* FILTER BAR */
+.filters{
+  position:sticky; top:56px; z-index:40;
+  padding:10px 16px 12px;
+  background:var(--glass);
+  border-bottom:1px solid var(--glass-bd);
+  backdrop-filter:saturate(120%) blur(11px);
+  -webkit-backdrop-filter:saturate(120%) blur(11px);
+  display:grid; grid-template-columns:1fr 1fr; gap:12px;
+}
+.filters::after{
+  content:""; position:absolute; left:0; right:0; bottom:-24px; height:24px;
+  background:linear-gradient(var(--glass), rgba(0,0,0,0)); pointer-events:none;
+}
+.filters .btnrow{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* Selects same size as +New/Reset (not bold) */
+select, input, button, textarea{ font:inherit; }
+.filters select{
+  width:100%; height:var(--chip-h); padding:0 12px;
+  background:#15161b; color:#fff; border:1px solid var(--line);
+  border-radius:var(--radius); font-size:13px; font-weight:500;
+  display:inline-flex; align-items:center;
+}
 button{ cursor:pointer; }
-button.ghost{ background:#15161b; color:#ddd; border:1px dashed #2a2b32; border-radius:12px; padding:10px 12px; }
-.group-title{ color:#c7c7d0; font-size:12px; letter-spacing:.2px; margin:14px 0 8px; opacity:.9; }
+button.ghost{
+  background:#15161b; color:#e6e6e6;
+  border:1px dashed var(--line); border-radius:var(--radius);
+  height:var(--chip-h); padding:0 var(--chip-px);
+  font-weight:700; font-size:13px;
+}
+#btnAddExercise, #btnResetDone{ width:100%; }
 
+/* PADDING AROUND CONTENT (breathing room) */
+.page, .split-wrap, .summary{ padding: 0 16px 16px; }
+
+/* CARDS */
 .cards{ display:grid; grid-template-columns:1fr; gap:10px; }
-
-/* Card layout */
 .card{
-  background:var(--card);
-  border:1px solid #191a20;
-  border-radius:16px;
-  padding:12px;
-  display:grid;
-  grid-template-columns: 1fr auto; /* left column + right pill */
-  gap:8px;
-  align-items:center;
+  background:var(--card); border:1px solid #191a20; border-radius:16px;
+  padding:12px; display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
 }
 .card:hover{ border-color:#2a2b32; }
-.card.done{ border-color:#21443f; box-shadow:0 0 0 1px #21443f inset; }
-.card.done .repsets{ background:#123c36; border-color:#1f5d55; color:#b6fff2; }
-
 .card .left{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .name-line{ display:flex; align-items:baseline; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.name{ font-weight:800; }
+.name{ font-weight:700; } /* match nav weight */
 .variation{ font-size:13px; color:#aeb0b9; font-weight:600; }
-
 .line.meta{ color:#aeb0b9; font-size:13px; }
 .line.weight{ color:#e8e9ef; font-size:14px; font-weight:700; }
 
-/* Right pill now shows reps × sets */
 .pill.repsets{
   display:inline-flex; align-items:center; justify-content:center;
-  background:#1c1d23; border:1px solid #2a2b32; color:#cfcfd6;
-  border-radius:999px; padding:8px 12px;
-  min-width:98px; white-space:nowrap; font-variant-numeric: tabular-nums;
+  background:transparent; color:#cfcfd6;
+  border:1px solid var(--accent); border-radius:999px;
+  min-width:98px; padding:8px 12px; white-space:nowrap; font-variant-numeric:tabular-nums;
 }
-
-.card{ background:var(--card); border:1px solid #191a20; border-radius:16px; padding:12px; display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; }
-.card .name{ font-weight:700; margin-bottom:2px; }
-.card .meta{ color:#aeb0b9; font-size:13px; }
-.card .plan{ color:#cfd0d6; font-size:13px; }
-.card .pill{ display:inline-flex; align-items:center; justify-content:center; background:#1c1d23; border:1px solid #2a2b32; color:#cfcfd6; border-radius:999px; padding:6px 10px; min-width:98px; white-space:nowrap; }
 .card.done{ border-color:#21443f; box-shadow:0 0 0 1px #21443f inset; }
-.card.done .pill{ background:#123c36; border-color:#1f5d55; color:#b6fff2; }
-.card:hover{ border-color:#2a2b32; }
-.page{ display:none; }
-.page.active{ display:block; }
-.period-tabs{ display:flex; gap:8px; padding:8px 0; position:sticky; top:52px; background:var(--bg); }
-.period-tabs button{ background:#15161b; border:1px solid #23242b; color:#ddd; border-radius:999px; padding:8px 12px; }
-.period-tabs button.active{ border-color:var(--acc); color:#fff; }
-.summary{ display:grid; gap:12px; }
-.summary .block{ background:#111216; border:1px solid #1d1e25; border-radius:16px; padding:14px; }
-.spacer{ height:64px; }
+.card.done .repsets{ border-color:#1f5d55; color:#b6fff2; }
+
+/* DIALOGS (log + add) */
 dialog{ width:100%; max-width:520px; border:none; border-radius:20px; padding:0; background:#0d0e12; color:#fff; }
 dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
 .logform{ padding:16px; }
-.logform .header h3{ margin:0; }
-.logform .header p{ margin:4px 0 14px; color:#a0a3ad; }
 .stack{ display:flex; flex-direction:column; gap:10px; }
 .stepper{ background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:10px; text-align:center; }
 .stepper label{ display:block; font-weight:700; font-size:12px; color:#c7c7d0; letter-spacing:.4px; }
@@ -83,520 +162,73 @@ dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
 .seg span{ color:#c7c7d0; font-weight:700; font-size:12px; }
 .seg-buttons{ display:flex; gap:6px; }
 .seg-buttons button{ background:#15161b; border:1px solid #23242b; color:#fff; padding:8px 10px; border-radius:10px; }
-.seg-buttons button.active{ background:#17322e; border-color:#2dd4bf; color:#9af1e5; }
+.seg-buttons button.active{ border-color:var(--accent); box-shadow: inset 0 0 0 2px var(--accent-weak); background:transparent; color:#e6fff9; }
 textarea{ width:100%; min-height:72px; background:#0f1015; border:1px solid #1f2028; border-radius:14px; padding:10px; color:#fff; }
-menu{ display:flex; gap:10px; justify-content:flex-end; margin:12px 0 0; padding:0; }
-menu button{ padding:10px 14px; border-radius:12px; border:1px solid #2a2b32; background:#15161b; color:#fff; }
-#btnLog{ background:#2dd4bf; border-color:#2dd4bf; color:#002b27; font-weight:700; }
-.toast{ position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#0f1015; border:1px solid #1f2028; color:#e6fff9; padding:10px 14px; border-radius:12px; box-shadow:0 8px 22px rgba(0,0,0,.35); }
-.wizard{ display:grid; gap:18px; }
-.q label{ display:block; font-size:13px; color:#c7c7d0; margin-bottom:6px; }
-.wiz-nav{ display:flex; align-items:center; gap:10px; margin-top:12px; }
-.wiz-nav .sp{ flex:1; }
-#wizSave{ background:#2dd4bf; border-color:#2dd4bf; color:#00322c; border-radius:12px; padding:10px 16px; }
-.subgroup { margin-bottom: 12px; }
 
-
-/* === User switcher === */
-.topbar .top-right{ display:flex; gap:8px; align-items:center; }
-#userSelect{ background:#15161b; color:#ddd; border:1px solid #23242b; border-radius:999px; padding:8px 12px; height:auto; }
-
-/* Center/nudge filter text up and apply to + New / Reset */
-.filters select, .filters button{ display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px); }
-
-/* Prevent double-tap zoom on iOS for tap-heavy buttons */
-.stepper .ctr button, .period-tabs button, .filters button{ touch-action: manipulation; -webkit-user-select: none; user-select: none; }
-
-/* Skip Progress button layout */
-menu{ display:flex; gap:10px; justify-content:flex-end; align-items:center; margin:12px 0 0; padding:0; }
+menu{ display:flex; gap:12px; justify-content:flex-end; margin:12px 0 0; padding:0; }
 menu .sp{ flex:1; }
+menu button{ height:var(--chip-h); padding:0 var(--chip-px); border-radius:var(--radius); border:1px dashed var(--line); background:#15161b; color:#fff; font-weight:700; }
+#btnLog{ background:var(--accent); border:1px solid var(--accent); color:#062822; font-weight:800; }
 
-/* Compact modal for small screens */
-@media (max-width: 420px){
-  .logform{ padding:12px; }
-  .stack{ gap:8px; }
-  .seg{ padding:8px; }
-  .stepper{ padding:8px; }
-  .stepper label{ font-size:11px; }
-  .stepper .ctr button{ width:40px; height:40px; border-radius:10px; }
-  .stepper .ctr span{ width:72px; font-size:24px; }
-  textarea{ min-height:56px; }
-}
-
-/* Group headings spacing for equipment sections */
-.subgroup{ margin-bottom:12px; }
-
-/* ===== Theme variables: teal (Camp) default; pastel purple (Annie) as OUTLINE ===== */
-:root{
-  --accent: #2bd2c8;   /* teal */
-  --accent-r: 45; --accent-g: 212; --accent-b: 191;
-  --accent-weak: rgba(43,210,200,0.18);
-
-  --text: #e6e6e6;
-  --bg-chip: #0f1015;
-  --bd-chip: #23242b;
-
-  /* Match height to “All/Equipment” controls */
-  --chip-height: 36px;
-  --chip-pad-x: 14px;
-}
-body.annie{
-  --accent: #c9a7ff;   /* pastel purple */
-  --accent-r: 201; --accent-g: 167; --accent-b: 255;
-  --accent-weak: rgba(201,167,255,0.20);
-}
-
-/* User chips row sits above header with the same breathing room */
-.user-bar{
-  display:flex; gap:8px;
-  margin: 0 0 8px 0;
-}
-
-/* Rounded-rect, outlined (match + New / Reset vibe) */
-.user-chip{
-  height: var(--chip-height);
-  padding: 0 var(--chip-pad-x);
-  border-radius: 12px;              /* not a pill */
-  border: 1px solid var(--bd-chip);
-  background: var(--bg-chip);
-  color: var(--text);
-  font-weight: 600;
-  display:inline-flex; align-items:center; justify-content:center;
-  line-height:1; cursor:pointer;
-}
-.user-chip.active{
-  border-color: var(--accent);              /* outline only */
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-}
-
-/* Keep outline look elsewhere (no solid fills) */
-#sideSeg button.active{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-  background: transparent;
-  color: var(--text);
-}
-.pill.repsets{
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--text);
-}
-.card.done{
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-/* Flash overlay respects theme color but remains soft */
-#flash.show{
-  background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.35) !important;
-}
-
-/* Nudge alignment so chips match Filters / + New / Reset */
-.filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip{
-  display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
-}
-
-/* OPTIONAL: if you had a rule that made nav active buttons solid, replace it with outline: */
-.nav-tabs button.active{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-  background: transparent;
-  color: var(--text);
-}
-
-/* ===== Theme (teal default / pastel purple for Annie) ===== */
-:root{
-  --accent:#2bd2c8;  --accent-r:45;  --accent-g:212; --accent-b:191;
-  --accent-weak: rgba(43,210,200,0.18);
-  --text:#e6e6e6; --bg-chip:#0f1015; --bd-chip:#23242b;
-
-  /* control heights to match your filter controls */
-  --chip-height: 44px;   /* bump for better touch targets */
-  --chip-pad-x: 14px;
-}
-body.annie{
-  --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
-  --accent-weak: rgba(201,167,255,0.20);
-}
-
-/* ===== Camp/Annie bar ABOVE header, same width rhythm as filters ===== */
-.user-bar{
-  padding: calc(env(safe-area-inset-top) + 8px) 16px 8px; /* breathing space + notch safe area */
-  display:grid; grid-template-columns: 1fr 1fr; gap:12px; width:100%;
-}
-.user-chip{
-  height: var(--chip-height);
-  padding: 0 var(--chip-pad-x);
-  width:100%;
-  border-radius: 12px;              /* rounded rectangle (not pill) */
-  border:1px solid var(--bd-chip);
-  background: var(--bg-chip);
-  color:var(--text);
-  font-weight:600; font-size:14px;
-  display:inline-flex; align-items:center; justify-content:center;
-}
-.user-chip.active{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-}
-
-/* ===== Header/nav — make Workouts/Summary match +New/Reset (outlined boxes) ===== */
-.topbar{ padding: 0 16px 8px; }
-.nav-tabs{
-  display:grid; grid-template-columns: 1fr 1fr; gap:12px;
-}
-.nav-tabs button{
-  height: var(--chip-height);
-  padding: 0 var(--chip-pad-x);
-  border-radius: 12px;
-  border:1px solid var(--bd-chip);
-  background: var(--bg-chip);
-  color:var(--text);
-  font-weight:600; font-size:14px;  /* smaller text to fit nicely */
-}
-.nav-tabs button.active{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-  background: transparent;
-  color: var(--text);
-}
-
-/* ===== Summary page tabs (Week/Month/Year) same outlined style ===== */
-.period-tabs{
-  display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;
-}
+/* SUMMARY period tabs */
+.period-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 16px; position:sticky; top:56px; }
 .period-tabs button{
-  height: var(--chip-height);
-  padding: 0 var(--chip-pad-x);
-  border-radius: 12px;
-  border:1px solid var(--bd-chip);
-  background: var(--bg-chip);
-  color:var(--text);
-  font-weight:600; font-size:14px;
+  height:var(--chip-h); padding:0 var(--chip-px);
+  background:var(--soft); color:var(--fg);
+  border:1px dashed var(--line); border-radius:var(--radius);
+  font-weight:700; font-size:13px;
 }
-.period-tabs button.active{
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak) inset;
-  background: transparent;
-}
+.period-tabs button.active{ border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent-weak); background:transparent; }
 
-/* ===== Keep outlined vibe elsewhere ===== */
-.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
-#sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
-.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
-#flash.show{ background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.35) !important; }
-
-/* Align vertical centering like filters and action buttons */
+/* MISC */
+.group-title{ color:#c7c7d0; font-size:12px; letter-spacing:.2px; margin:14px 0 8px; padding: 0 16px; }
+.subgroup{ margin-bottom:12px; }
 .filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip, .nav-tabs button, .period-tabs button{
   display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
 }
+.stepper .ctr button, .period-tabs button, .filters button{ touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 
-/* ==== Theme: teal (Camp) / pastel purple (Annie) ==== */
-:root{
-  --accent:#2bd2c8;  --accent-r:45;  --accent-g:212; --accent-b:191;
-  --accent-weak: rgba(43,210,200,0.18);
-  --text:#e6e6e6; --bg-chip:#0f1015; --bd-chip:#23242b;
 
-  --chip-h: 44px;            /* same height across chips/buttons */
-  --chip-px: 14px;
+/* PAGE visibility */
+.page{ display:none; }
+.page.active{ display:block; }
 
-  /* frosted layer color */
-  --glass: rgba(10, 11, 15, 0.62);
-  --glass-bd: #1d1e25;
-}
-body.annie{
-  --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
-  --accent-weak: rgba(201,167,255,0.20);
-}
+/* Hide filters when on summary page */
+body[data-page="summary"] .filters{ display:none; }
 
-/* ===== USER BAR (above header; 2 col, same rhythm as filters) ===== */
-.user-bar{
-  padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
-  display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%;
-}
-.user-chip{
-  height:var(--chip-h); padding:0 var(--chip-px); width:100%;
-  border-radius:12px; border:1px solid var(--bd-chip);
-  background:var(--bg-chip); color:var(--text); font-weight:600; font-size:14px;
-  display:inline-flex; align-items:center; justify-content:center;
-}
-.user-chip.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; }
 
-/* ===== HEADER + FROST ===== */
-.topbar{
-  position:sticky; top:0; z-index:50;
-  padding: 6px 16px 10px;
-  backdrop-filter:saturate(120%) blur(10px);
-  -webkit-backdrop-filter:saturate(120%) blur(10px);
-  background:var(--glass);
-  border-bottom:1px solid var(--glass-bd);
-}
-/* subtle gradient fade below header so it breathes when scrolling */
-.topbar::after{
-  content:""; position:absolute; left:0; right:0; bottom:-18px; height:18px;
-  background:linear-gradient(var(--glass), rgba(0,0,0,0));
-  pointer-events:none;
-}
+/* Hide split sections when viewing Summary */
+body[data-page="summary"] #selectedSplitWrap,
+body[data-page="summary"] #otherTitle { display: none !important; }
 
-/* ===== NAV PILLS (Workouts / Summary) -> match +New / Reset (outlined boxes) ===== */
-.nav-tabs{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.nav-tabs button{
-  height:var(--chip-h); padding:0 var(--chip-px);
-  border-radius:12px; border:1px solid var(--bd-chip);
-  background:var(--bg-chip); color:var(--text);
-  font-weight:600; font-size:14px;
-}
-.nav-tabs button.active{
-  border-color:var(--accent) !important;
-  box-shadow:0 0 0 2px var(--accent-weak) inset !important;
-  background:transparent !important; color:var(--text) !important;
-}
 
-/* ===== FILTER STRIP: add frost + fade to the end of filters ===== */
-.filters{
-  position:sticky; top:56px; z-index:40;  /* sits just under header */
-  padding:10px 16px 12px;
-  backdrop-filter:saturate(120%) blur(8px);
-  -webkit-backdrop-filter:saturate(120%) blur(8px);
-  background:var(--glass);
-  border-bottom:1px solid var(--glass-bd);
-}
-.filters::after{
-  content:""; position:absolute; left:0; right:0; bottom:-20px; height:20px;
-  background:linear-gradient(var(--glass), rgba(0,0,0,0));
-  pointer-events:none;
-}
+/* ---- Optimistic & Stepper Pulse ---- */
+:root{ --danger:#ff5b6b; --danger-r:255; --danger-g:91; --danger-b:107; }
 
-/* ===== SUMMARY PERIOD TABS (Week / Month / Year) outlined like others ===== */
-.period-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-.period-tabs button{
-  height:var(--chip-h); padding:0 var(--chip-px);
-  border-radius:12px; border:1px solid var(--bd-chip);
-  background:var(--bg-chip); color:var(--text);
-  font-weight:600; font-size:14px;
+@keyframes pulseUp {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--accent-r),var(--accent-g),var(--accent-b), .35); }
+  100% { box-shadow: 0 0 0 14px rgba(var(--accent-r),var(--accent-g),var(--accent-b), 0); }
 }
-.period-tabs button.active{
-  border-color:var(--accent) !important;
-  box-shadow:0 0 0 2px var(--accent-weak) inset !important;
-  background:transparent !important;
+@keyframes pulseDown {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--danger-r),var(--danger-g),var(--danger-b), .35); }
+  100% { box-shadow: 0 0 0 14px rgba(var(--danger-r),var(--danger-g),var(--danger-b), 0); }
 }
+.stepper{ position:relative; overflow:visible; }
+.stepper.pulse-up   { border-color: var(--accent); animation: pulseUp .38s ease-out; }
+.stepper.pulse-down { border-color: var(--danger); animation: pulseDown .38s ease-out; }
 
-/* ===== Keep outlined vibe elsewhere ===== */
-.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
-#sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
-.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
-#flash.show{ background:rgba(var(--accent-r), var(--accent-g), var(--accent-b), .35) !important; }
 
-/* Align vertical centering across chips/buttons */
-.filters select, .filters button, #btnAddExercise, #btnResetDone,
-.user-chip, .nav-tabs button, .period-tabs button{
-  display:inline-flex; align-items:center; justify-content:center; transform:translateY(-2px);
-}
+/* ---- v10: tame iOS blue focus ring & use accent ring ---- */
+button:focus { outline: none !important; }
+button:focus-visible { outline: none !important; }
 
-/* ================= FINAL OVERRIDES ================= */
-
-/* --- Feather the frosted header & filters --- */
-.topbar{
-  position: sticky; top: 0; z-index: 50;
-  backdrop-filter: saturate(120%) blur(10px);
-  -webkit-backdrop-filter: saturate(120%) blur(10px);
-  background: var(--glass, rgba(10,11,15,.62));
-  border-bottom: 1px solid var(--glass-bd, #1d1e25);
-  padding: 6px 16px 10px;
-}
-.topbar::after{
-  content:""; position:absolute; left:0; right:0;
-  /* raise the cut slightly and feather it */
-  bottom:-24px; height:24px;
-  background: linear-gradient(
-    to bottom,
-    var(--glass, rgba(10,11,15,.62)) 0%,
-    rgba(16,18,24,.45) 50%,
-    rgba(0,0,0,0) 100%
-  );
-  pointer-events: none;
-}
-.filters{
-  position: sticky; top: 56px; z-index: 40;
-  backdrop-filter: saturate(120%) blur(8px);
-  -webkit-backdrop-filter: saturate(120%) blur(8px);
-  background: var(--glass, rgba(10,11,15,.62));
-  border-bottom: 1px solid var(--glass-bd, #1d1e25);
-  padding: 10px 16px 12px;
-}
-.filters::after{
-  content:""; position:absolute; left:0; right:0;
-  bottom:-26px; height:26px; /* longer feather below filters */
-  background: linear-gradient(
-    to bottom,
-    var(--glass, rgba(10,11,15,.62)) 0%,
-    rgba(16,18,24,.42) 45%,
-    rgba(0,0,0,0) 100%
-  );
-  pointer-events:none;
-}
-
-/* --- Hard-align widths/padding across user bar, header, filters --- */
-.user-bar, .topbar, .filters { padding-left:16px !important; padding-right:16px !important; }
-
-/* --- Workouts / Summary: rectangular, outlined, same grid as filters --- */
-.topbar .nav-tabs{
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
-  gap: 12px !important;
-}
-.topbar .nav-tabs button,
-.topbar nav button{ /* catch any legacy selector */
-  height: var(--chip-h, 44px) !important;
-  padding: 0 var(--chip-px, 14px) !important;
-  width: 100% !important;
-  border-radius: 12px !important;             /* not pill */
-  border: 1px solid var(--bd-chip, #23242b) !important;
-  background: var(--bg-chip, #0f1015) !important;
-  color: var(--text, #e6e6e6) !important;
-  font-weight: 600 !important;
-  font-size: 14px !important;
-  box-shadow: none !important;
-}
-.topbar .nav-tabs button.active,
-.topbar nav button.active{
+/* More specific for our controls */
+.seg-buttons button:focus-visible,
+.stepper .ctr button:focus-visible,
+.nav-tabs button:focus-visible,
+.user-chip:focus-visible,
+.period-tabs button:focus-visible,
+button.ghost:focus-visible {
   border-color: var(--accent) !important;
-  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
-  background: transparent !important;
-  color: var(--text) !important;
+  box-shadow: inset 0 0 0 2px var(--accent-weak), 0 0 0 2px rgba(0,0,0,0) !important;
 }
-
-/* --- Summary period tabs (Week / Month / Year) match the same style --- */
-.period-tabs{
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
-  gap: 8px !important;
-}
-.period-tabs button{
-  height: var(--chip-h, 44px) !important;
-  padding: 0 var(--chip-px, 14px) !important;
-  border-radius: 12px !important;
-  border: 1px solid var(--bd-chip, #23242b) !important;
-  background: var(--bg-chip, #0f1015) !important;
-  color: var(--text, #e6e6e6) !important;
-  font-weight: 600 !important;
-  font-size: 14px !important;
-}
-.period-tabs button.active{
-  border-color: var(--accent) !important;
-  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
-  background: transparent !important;
-}
-
-/* --- Misc alignment: make all control buttons full-width inside their grid cells --- */
-.nav-tabs button, .filters button, .filters select { width: 100% !important; }
-
-/* --- Keep outlined vibe elsewhere --- */
-.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
-#sideSeg button.active{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-weak) inset; background:transparent; color:var(--text); }
-.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
-#flash.show{ background: rgba(var(--accent-r,45), var(--accent-g,212), var(--accent-b,191), 0.35) !important; }
-
-/* ============== FINAL ALIGNMENT + STYLE FIXES ============== */
-
-/* 1) Header = two-column grid so nav pills align with filters below */
-.topbar{
-  display:grid !important;
-  grid-template-columns: 1fr 1fr !important;  /* brand | nav (matches filter columns) */
-  align-items:center !important;
-  column-gap:12px !important;
-  padding: 8px 16px 10px !important;
-  position: sticky; top:0; z-index:50;
-  backdrop-filter: saturate(120%) blur(10px);
-  -webkit-backdrop-filter: saturate(120%) blur(10px);
-  background: var(--glass, rgba(10,11,15,.62));
-  border-bottom: 1px solid var(--glass-bd, #1d1e25);
-}
-.topbar::after{
-  content:""; position:absolute; left:0; right:0; bottom:-22px; height:22px;
-  background: linear-gradient(var(--glass, rgba(10,11,15,.62)), rgba(0,0,0,0));
-  pointer-events:none;
-}
-
-/* 2) Brand on the left, bold */
-.topbar .brand{
-  grid-column: 1 / 2;
-  font-weight: 800; letter-spacing: .2px;
-}
-
-/* 3) Workouts/Summary on the right, side-by-side, dotted outline like +New/Reset */
-.topbar .nav-tabs{
-  grid-column: 2 / 3;
-  display:grid !important;
-  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
-  gap:12px !important;
-  width:100% !important;
-}
-.topbar .nav-tabs button,
-.topbar nav button{ /* catch any legacy selector */
-  height: 40px !important;                  /* match +New/Reset */
-  padding: 0 14px !important;
-  width: 100% !important;
-  border-radius: 12px !important;           /* rounded-rect (not pill) */
-  border: 1px dotted var(--bd-chip, #23242b) !important;  /* dotted outline */
-  background: var(--bg-chip, #0f1015) !important;
-  color: var(--text, #e6e6e6) !important;
-  font-weight: 700 !important;              /* stronger label like header controls */
-  font-size: 13px !important;               /* slightly smaller so it fits nicely */
-  box-shadow: none !important;
-}
-.topbar .nav-tabs button.active,
-.topbar nav button.active{
-  border-color: var(--accent) !important;                 /* teal/purple */
-  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
-  background: transparent !important;
-  color: var(--text) !important;
-  /* keep dotted when active too */
-  border-style: dotted !important;
-}
-
-/* 4) Filters keep same two-column rhythm, with feather fade below */
-.filters{
-  position: sticky; top: 56px; z-index: 40;
-  padding: 10px 16px 12px;
-  backdrop-filter: saturate(120%) blur(8px);
-  -webkit-backdrop-filter: saturate(120%) blur(8px);
-  background: var(--glass, rgba(10,11,15,.62));
-  border-bottom: 1px solid var(--glass-bd, #1d1e25);
-}
-.filters::after{
-  content:""; position:absolute; left:0; right:0; bottom:-24px; height:24px;
-  background: linear-gradient(var(--glass, rgba(10,11,15,.62)), rgba(0,0,0,0));
-  pointer-events:none;
-}
-
-/* 5) Make sure all control rows share the same side padding */
-.user-bar, .topbar, .filters { padding-left:16px !important; padding-right:16px !important; }
-
-/* 6) Period tabs on Summary also use dotted outline + theme color */
-.period-tabs{
-  display:grid !important;
-  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
-  gap:8px !important;
-}
-.period-tabs button{
-  height: 40px !important;
-  padding: 0 14px !important;
-  border-radius: 12px !important;
-  border: 1px dotted var(--bd-chip, #23242b) !important;
-  background: var(--bg-chip, #0f1015) !important;
-  color: var(--text, #e6e6e6) !important;
-  font-weight: 700 !important;
-  font-size: 13px !important;
-}
-.period-tabs button.active{
-  border-color: var(--accent) !important;
-  box-shadow: inset 0 0 0 2px var(--accent-weak) !important;
-}
-
-/* 7) Keep other accents outlined & on-theme */
-.pill.repsets{ border:1px solid var(--accent); background:transparent; color:var(--text); }
-#sideSeg button.active{ border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent-weak); background:transparent; color:var(--text); }
-.card.done{ outline:2px solid var(--accent); outline-offset:-2px; }
-#flash.show{ background: rgba(var(--accent-r,45), var(--accent-g,212), var(--accent-b,191), .35) !important; }
-
-

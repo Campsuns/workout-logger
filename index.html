@@ -1,121 +1,173 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Workout Logger</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+  <!-- Flash for successful log -->
   <div id="flash"></div>
-  
-  <!-- User row (above header, separate line) -->
-<div class="user-bar" id="userRow">
-  <button class="user-chip" data-user="u_camp">Camp</button>
-  <button class="user-chip" data-user="u_annie">Annie</button>
-</div>  
-  
-  <header class="topbar"
+  <div id="toast" hidden class="toast"></div>
+
+  <!-- USER SWITCH -->
+  <div class="user-bar" id="userRow">
+    <button class="user-chip" data-user="u_camp" type="button">Camp</button>
+    <button class="user-chip" data-user="u_annie" type="button">Annie</button>
+  </div>
+
+  <!-- HEADER -->
+  <header class="topbar">
     <div class="brand">Workout Logger</div>
-    <div class="top-right">
-      
-      <nav>
-      <button data-nav="list" class="active">Workouts</button>
-      <button data-nav="summary">Summary</button>
+    <nav class="nav-tabs">
+      <button type="button" data-nav="list"  class="active">Workouts</button>
+      <button type="button" data-nav="summary">Summary</button>
     </nav>
   </header>
+
+  <!-- FILTER BAR -->
+  <section class="filters">
+    <select id="splitSelect" title="Split"></select>
+    <select id="equipmentFilter" title="Equipment"></select>
+
+    <select id="muscleFilter" title="Muscle"></select>
+    <div class="btnrow">
+      <button id="btnAddExercise" class="ghost" type="button">+ New</button>
+      <button id="btnResetDone" class="ghost" type="button">Reset</button>
+    </div>
+  </section>
+
+  <!-- SELECTED SPLIT SECTION -->
+  <section id="selectedSplitWrap" hidden class="split-wrap">
+    <div class="group-title">Selected Split</div>
+    <div id="selectedSplitList" class="cards"></div>
+  </section>
+  <div id="otherTitle" class="group-title" hidden>Other Workouts</div>
+
+  <!-- PAGES -->
   <main>
     <section id="page-list" class="page active">
-      <div class="filters">
-        <select id="splitSelect"></select>
-        <select id="equipmentFilter"><option value="">Equipment</option></select>
-        <select id="muscleFilter"><option value="">Muscle</option></select>
-        <div class="btnrow">
-          <button id="btnAddExercise" class="ghost">+ New</button>
-          <button id="btnResetDone" class="ghost">Reset</button>
-        </div>
-      </div>
-      <div id="selectedSplitWrap" class="group" hidden>
-        <div class="group-title">Selected Split</div>
-        <div id="selectedSplitList" class="cards"></div>
-      </div>
-      <div id="otherWrap" class="group">
-        <div class="group-title" id="otherTitle" hidden>Other Exercises</div>
-        <div id="workoutList" class="cards"></div>
-      </div>
-      <div class="spacer"></div>
+      <div id="workoutList" class="cards"></div>
     </section>
 
     <section id="page-summary" class="page">
-      <div class="period-tabs">
-        <button data-period="week" class="active">This Week</button>
-        <button data-period="month">This Month</button>
-        <button data-period="year">This Year</button>
+      <div class="period-tabs" style="margin-top:6px;">
+        <button type="button" data-period="week"   class="active">Week</button>
+        <button type="button" data-period="month">Month</button>
+        <button type="button" data-period="year">Year</button>
       </div>
       <div id="summaryContent" class="summary"></div>
-      <div class="spacer"></div>
     </section>
   </main>
 
+  <!-- LOG MODAL -->
   <dialog id="logModal">
-    <form method="dialog" class="logform">
-      <div class="header">
-        <h3 id="logTitle">Exercise</h3>
-        <p id="logSub"></p>
+    <form method="dialog" class="logform" id="logForm">
+      <h3 id="logTitle" style="margin:0 0 4px"></h3>
+      <div id="logSub" class="meta" style="margin:0 0 10px"></div>
+
+      <div class="seg" id="sideSeg">
+        <span>Side</span>
+        <div class="seg-buttons">
+          <button type="button" data-side="left">Left</button>
+          <button type="button" data-side="right">Right</button>
+          <button type="button" data-side="both" class="active">Both</button>
+        </div>
       </div>
 
       <div class="stack">
-        <div class="seg"><span>Side</span>
-          <div class="seg-buttons" id="sideSeg">
-            <button type="button" data-side="both" class="active">Both</button>
-            <button type="button" data-side="left">Left</button>
-            <button type="button" data-side="right">Right</button>
+        <div class="stepper" data-field="sets_done">
+          <label>Sets</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
           </div>
         </div>
 
-        <div class="stepper" data-field="sets_done"><label>Sets</label><div class="ctr"><button type="button" class="down">▼</button><span>3</span><button type="button" class="up">▲</button></div></div>
-        <div class="stepper" data-field="planned_reps"><label>Reps</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
-        <div class="stepper" data-field="weight_lb"><label>Weight</label><div class="ctr"><button type="button" class="down">▼</button><span>135</span><button type="button" class="up">▲</button></div></div>
-        <div class="stepper" data-field="height"><label>Height</label><div class="ctr"><button type="button" class="down">▼</button><span>0</span><button type="button" class="up">▲</button></div></div>
-        <div class="stepper" data-field="fail_reps"><label>Fail reps (last set)</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
-        <div class="stepper" data-field="rpe_set2"><label>RPE (set 2)</label><div class="ctr"><button type="button" class="down">▼</button><span>8</span><button type="button" class="up">▲</button></div></div>
+        <div class="stepper" data-field="planned_reps">
+          <label>Reps</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
+          </div>
+        </div>
+
+        <div class="stepper" data-field="weight_lb">
+          <label>Weight (lb)</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
+          </div>
+        </div>
+
+        <div class="stepper" data-field="height">
+          <label>Height</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
+          </div>
+        </div>
+
+        <div class="stepper" data-field="fail_reps">
+          <label>Fail Reps (Last Set)</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
+          </div>
+        </div>
+
+        <div class="stepper" data-field="rpe_set2">
+          <label>RPE (Set 2)</label>
+          <div class="ctr">
+            <button type="button" class="down">−</button>
+            <div class="ctrval"><span>0</span></div>
+            <button type="button" class="up">+</button>
+          </div>
+        </div>
       </div>
 
       <textarea id="logNotes" placeholder="Notes (optional)"></textarea>
+
       <menu>
-        <button value="cancel" class="ghost">Cancel</button>
-        <button id="btnSkip" class="ghost" type="button">Skip Progress</button>
-        <div class="sp"></div>
-        <button id="btnLog" value="default">Log</button>
+        <span class="sp"></span>
+        <button id="btnSkip" type="button">Skip Progress</button>
+        <button id="btnLog"  type="button">Log</button>
+        <button id="btnCancel" value="cancel" type="reset">Cancel</button>
       </menu>
     </form>
   </dialog>
 
+  <!-- ADD EXERCISE WIZARD -->
   <dialog id="addModal">
     <form method="dialog" class="logform">
-      <div class="header"><h3>Add Exercise</h3></div>
+      <h3 style="margin:0 0 8px">New Exercise</h3>
       <div class="wizard">
-        <div class="q" data-k="name"><label>Name</label><input id="exName" placeholder="e.g., Bench press" required /></div>
-        <div class="q" data-k="variation"><label>Variation</label><input id="exVar" placeholder="e.g., Incline" /></div>
-        <div class="q" data-k="equipment"><label>Equipment / attachment</label><input id="exEq" placeholder="e.g., Dumbbell, rope, smith" /></div>
-        <div class="q" data-k="primary"><label>Primary muscle</label><input id="exPri" placeholder="e.g., Chest" /></div>
-        <div class="q" data-k="secondary"><label>Secondary muscle</label><input id="exSec" placeholder="e.g., Triceps" /></div>
-        <div class="q" data-k="tertiary"><label>Tertiary muscle</label><input id="exTer" placeholder="e.g., Front delt" /></div>
-        <div class="q" data-k="sets"><label>Sets</label><input id="exSets" type="number" min="1" step="1" placeholder="e.g., 3" /></div>
-        <div class="q" data-k="default_weight"><label>Default weight (lb)</label><input id="exW" type="number" step="1" placeholder="e.g., 45" /></div>
-        <div class="q" data-k="default_height"><label>Default height</label><input id="exH" type="number" step="1" placeholder="e.g., 10" /></div>
-        <div class="q" data-k="increment_lb"><label>Increment (lb)</label><input id="exInc" type="number" step="0.5" placeholder="e.g., 5" /></div>
+        <div class="q"><label>Name</label><input id="exName" /></div>
+        <div class="q" hidden><label>Variation</label><input id="exVar" /></div>
+        <div class="q" hidden><label>Primary Muscle</label><input id="exPri" /></div>
+        <div class="q" hidden><label>Secondary Muscle</label><input id="exSec" /></div>
+        <div class="q" hidden><label>Tertiary Muscle</label><input id="exTer" /></div>
+        <div class="q" hidden><label>Equipment</label><input id="exEq" /></div>
+        <div class="q" hidden><label>Sets</label><input id="exSets" type="number" value="3" /></div>
+        <div class="q" hidden><label>Default Weight (lb)</label><input id="exW" type="number" value="0" /></div>
+        <div class="q" hidden><label>Default Height</label><input id="exH" type="number" value="0" /></div>
+        <div class="q" hidden><label>Increment (lb)</label><input id="exInc" placeholder="blank = 5" /></div>
       </div>
-      <div class="wiz-nav">
-        <button id="wizPrev" class="ghost" type="button">Back</button>
-        <div class="sp"></div>
-        <button id="wizNext" class="ghost" type="button">Next</button>
+      <menu>
+        <button id="wizPrev" type="button">Back</button>
+        <button id="wizNext" type="button">Next</button>
         <button id="wizSave" type="button">Save</button>
-      </div>
+      </menu>
     </form>
   </dialog>
 
-  <div id="toast" class="toast" hidden></div>
   <script src="app.js"></script>
 </body>
 </html>
