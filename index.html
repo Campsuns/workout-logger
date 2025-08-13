@@ -9,14 +9,22 @@
 <body>
   <div id="flash"></div>
   <header class="topbar">
-    <div class="brand">Workout Logger</div>
-    <div class="top-right">
-      <select id="userSelect" title="User"></select>
-      <nav>
+  <div class="brand">Workout Logger</div>
+
+  <div class="head-rows">
+    <!-- Row 1: user chips -->
+    <div class="user-tabs" id="userTabs">
+      <button class="chip" data-user="u_camp">Camp</button>
+      <button class="chip" data-user="u_annie">Annie</button>
+    </div>
+
+    <!-- Row 2: nav -->
+    <nav class="nav-tabs">
       <button data-nav="list" class="active">Workouts</button>
       <button data-nav="summary">Summary</button>
     </nav>
-  </header>
+  </div>
+</header>
   <main>
     <section id="page-list" class="page active">
       <div class="filters">
