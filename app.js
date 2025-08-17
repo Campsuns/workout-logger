@@ -54,31 +54,9 @@ const $$ = (q, root=document)=>Array.from(root.querySelectorAll(q));
   }, { passive:false });
 })();
 
-// ==== LocalStorage (per-user namespace) ====
-function _nsKey(base){ const uid = (state && state.userId) || 'u_camp'; return `${base}:${uid}`; }
-function _loadMap(base){ try{ return JSON.parse(localStorage.getItem(_nsKey(base))||'{}'); }catch(_){ return {}; } }
-function _saveMap(base, obj){ localStorage.setItem(_nsKey(base), JSON.stringify(obj||{})); }
-// One-time migration: copy legacy unscoped keys into current user's namespace if the namespaced key is missing
-(function _migrateLegacy(){ try{
-  const uid = (state && state.userId) || 'u_camp';
-  ['doneMap','lastSide'].forEach(base=>{
-    const ns = _nsKey(base);
-    if(!localStorage.getItem(ns) && localStorage.getItem(base)){
-      const obj = JSON.parse(localStorage.getItem(base)||'{}');
-      localStorage.setItem(ns, JSON.stringify(obj));
-    }
-  });
-} catch(_){} })();
-
 // ==== Small helpers ====
 function fmt(n){ return Number(n||0).toFixed(0); }
-function today(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`; // local YYYY-MM-DD to avoid off-by-one
-}
+function today(){ const d=new Date(); return d.toISOString().slice(0,10); }
 function startOfPeriod(period){
   const d=new Date();
   if(period==='week'){ const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
@@ -96,10 +74,17 @@ function equipDisplay(lbl){
   return s.replace(/\b\w/g,c=>c.toUpperCase())
           .replace(/\bEz\b/g,'EZ').replace(/\bV Bar\b/g,'V-Bar');
 }
-function markDone(exId){ const map=_loadMap('doneMap'); map[exId]=Date.now(); _saveMap('doneMap', map); }
-function isDone(exId){ const map=_loadMap('doneMap'); const ts=map[exId]; if(!ts) return false; const ageH=(Date.now()-ts)/(1000*60*60); return ageH<CONFIG.DONE_TTL_HOURS; }
-function chooseSide(exId){ const s=_loadMap('lastSide'); return s[exId]||'both'; }
-function saveSide(exId, side){ const s=_loadMap('lastSide'); s[exId]=side; _saveMap('lastSide', s); }
+function markDone(exId){
+  const map=JSON.parse(localStorage.getItem('doneMap')||'{}'); map[exId]=Date.now();
+  localStorage.setItem('doneMap', JSON.stringify(map));
+}
+function isDone(exId){
+  const map=JSON.parse(localStorage.getItem('doneMap')||'{}'); const ts=map[exId];
+  if(!ts) return false; const ageH=(Date.now()-ts)/(1000*60*60); return ageH<CONFIG.DONE_TTL_HOURS;
+}
+function chooseSide(exId){ const s=JSON.parse(localStorage.getItem('lastSide')||'{}'); return s[exId]||'both'; }
+
+function saveSide(exId, side){ const s=JSON.parse(localStorage.getItem('lastSide')||'{}'); s[exId]=side; localStorage.setItem('lastSide', JSON.stringify(s)); }
 
 // === Period tabs (Week/Month/Year) sliding pill helper ===
 function ensurePeriodSlider(container, current){
@@ -392,7 +377,7 @@ function renderFilters(){
 
   // add/reset
   $('#btnAddExercise').onclick = ()=> openAddWizard();
-  $('#btnResetDone').onclick   = ()=>{ localStorage.removeItem(_nsKey('doneMap')); renderList(); };
+  $('#btnResetDone').onclick   = ()=>{ localStorage.removeItem('doneMap'); renderList(); };
   $('#btnResetDone').textContent = 'Reset';
 }
 
@@ -1201,18 +1186,23 @@ function rankImprovements(period){
 
 // Local done map helpers
 function setDoneLocal(exId, tsOrNull){
-  const map = _loadMap('doneMap');
-  if (tsOrNull == null) delete map[exId]; else map[exId] = tsOrNull;
-  _saveMap('doneMap', map);
+  const map = JSON.parse(localStorage.getItem('doneMap')||'{}');
+  if (tsOrNull == null) delete map[exId];
+  else map[exId] = tsOrNull;
+  localStorage.setItem('doneMap', JSON.stringify(map));
 }
 function optimisticMarkDone(exId){
-  const map = _loadMap('doneMap');
+  const map = JSON.parse(localStorage.getItem('doneMap')||'{}');
   const prev = Object.prototype.hasOwnProperty.call(map, exId) ? map[exId] : null;
+
+  // Apply highlight immediately
   setDoneLocal(exId, Date.now());
   const card = document.querySelector(`.card[data-id="${exId}"]`);
   if (card) card.classList.add('done');
   flash();
   try { if (navigator.vibrate) navigator.vibrate(15); } catch (_) {}
+
+  // Rollback if API fails
   return () => {
     if (prev === null) setDoneLocal(exId, null); else setDoneLocal(exId, prev);
     if (card) card.classList.remove('done');
@@ -1469,60 +1459,26 @@ async function refreshFromBackend(){
 
 
 function _isoDate(val){
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val; // already YYYY-MM-DD
+  if (typeof val==='string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
   const d = new Date(val);
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`; // local date, no off-by-one
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 function _mondayOf(d){ const x=new Date(d); x.setDate(d.getDate()-((d.getDay()+6)%7)); x.setHours(0,0,0,0); return x; }
 function _addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 
-function _startOfWeekLocal(d, weekStart){
-  const date = new Date(d);
-  date.setHours(0,0,0,0);
-  const dow = date.getDay(); // 0=Sun ... 6=Sat (local)
-  const ws  = Number.isFinite(weekStart) ? weekStart : 1; // default Monday
-  // shift so that result is local midnight of the configured start day
-  let diff = dow - (ws % 7);
-  if (diff < 0) diff += 7;
-  date.setDate(date.getDate() - diff);
-  return date;
-}
-
-function _dateOnlyLocal(val){
-  // Prefer YYYY-MM-DD as-is; otherwise build local date string
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-  const d = new Date(val);
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
-}
-
 function daysThisWeekFlags(){
-  const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 1; // 1=Mon
-  const start = _startOfWeekLocal(new Date(), ws);           // local midnight at week start
-  const end   = new Date(start); end.setDate(start.getDate()+7); // half-open [start, end)
-
-  // Collect unique local YYYY-MM-DD inside this week window
-  const daySet = new Set();
-  for(const l of logsForUser()){
-    const key = _dateOnlyLocal(l.date || l.timestamp);
-    const dt  = new Date(key+'T12:00:00'); // local noon avoids DST edge cases
-    if (dt >= start && dt < end) daySet.add(key);
+  const logs = logsForUser();
+  const mon = _mondayOf(new Date());
+  const end = _addDays(mon,6);
+  const days = new Set();
+  for(const l of logs){
+    const ds = _isoDate(l.date||l.timestamp);
+    const dt = new Date(ds+'T12:00:00');
+    if(dt>=mon && dt<=end) days.add(ds);
   }
-
-  // Build flags in order from week start + i
   const flags = [];
-  for(let i=0;i<7;i++){
-    const d = new Date(start); d.setDate(start.getDate()+i);
-    const key = _dateOnlyLocal(d);
-    flags.push(daySet.has(key));
-  }
-  const count = flags.reduce((a,b)=>a + (b?1:0), 0);
-  return { count, flags };
+  for(let i=0;i<7;i++){ const ds=_isoDate(_addDays(mon,i)); flags.push(days.has(ds)); }
+  return { count: days.size, flags };
 }
 
 function computeNextFromPerformance(last, ex){
