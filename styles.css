@@ -536,3 +536,24 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
   #logModal .row{ grid-template-columns: repeat(2, minmax(0,1fr)); column-gap:12px; }
   #logModal .row > .stepper{ min-width:0; }
 }
+
+
+/* === Log modal: precise alignment for stepper arrows and value === */
+#logModal .stepper .ctr{
+  /* switch to a 3-column grid: [▲][value][▼] */
+  display: grid !important;
+  grid-template-columns: 40px minmax(72px,1fr) 40px;
+  align-items: center;
+  gap: 12px;
+  justify-content: initial; /* cancel space-between from base */
+}
+#logModal .stepper .ctr button{
+  width: 40px; height: 40px;
+  display:flex; align-items:center; justify-content:center;
+  line-height: 1; /* center the ▲/▼ glyphs */
+}
+#logModal .stepper .ctr span{
+  display:flex; align-items:center; justify-content:center;
+  height:40px; min-width:72px; line-height:1;
+  font-variant-numeric: tabular-nums; /* avoid width jitter when value changes */
+}
