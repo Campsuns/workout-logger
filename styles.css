@@ -556,11 +556,12 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
   padding: 0;                  /* no inner padding wobble */
   box-sizing: border-box;      /* include border in the 40px box */
   line-height: 1;              /* center the ▲/▼ glyphs */
+  font-size: 16px;             /* fit arrows comfortably in 40px box */
 }
 #logModal .stepper .ctr span{
   display:flex; align-items:center; justify-content:center;
-  height:40px; min-width:72px;
+  height:40px; min-width:68px;
   line-height:1; letter-spacing:0; /* avoid baseline/kerning drift */
-  font-size:24px; font-weight:800; /* keep intended weight/size */
+  font-size:22px; font-weight:800; /* fit value comfortably */
   font-variant-numeric: tabular-nums; /* avoid width jitter when value changes */
 }
