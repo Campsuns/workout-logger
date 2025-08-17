@@ -177,9 +177,25 @@ dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
 .stack{ display:flex; flex-direction:column; gap:16px; }
 .stepper{ background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:14px; text-align:center; }
 .stepper label{ display:block; font-weight:700; font-size:12px; color:#c7c7d0; letter-spacing:.4px; }
-.stepper .ctr{ margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.stepper .ctr button{ width:40px; height:40px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff; }
-.stepper .ctr span{ font-size:24px; font-weight:800; letter-spacing:1px; display:inline-block; min-width:72px; text-align:center; }
+.stepper .ctr{
+  margin-top:6px;
+  display:grid;
+  grid-template-columns: 40px minmax(68px,1fr) 40px;
+  align-items:center;
+  gap:12px;
+  height:40px;
+}
+.stepper .ctr button{
+  width:40px; height:40px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  padding:0; line-height:1; font-size:16px;
+}
+.stepper .ctr span{
+  display:flex; align-items:center; justify-content:center;
+  height:40px; min-width:68px; text-align:center;
+  font-size:22px; font-weight:800; line-height:1; letter-spacing:0;
+  font-variant-numeric: tabular-nums;
+}
 .seg{ display:flex; align-items:center; justify-content:space-between; background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:12px; }
 .seg span{ color:#c7c7d0; font-weight:700; font-size:12px; }
 .seg-buttons{ display:flex; gap:8px; }
@@ -450,29 +466,6 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 }
 
 
-/* === Log modal: make each row and control fill width, and align steppers === */
-#logModal .stack .row{ width:100% !important; }
-#logModal .stack .row > .stepper,
-#logModal .stack .row > .seg,
-#logModal .stack .row > textarea{ width:100% !important; }
-
-/* Center ▲ value ▼ precisely in a 40px track (scoped to the log modal only) */
-#logModal .stepper .ctr{
-  display:grid !important;
-  grid-template-columns: 40px minmax(68px,1fr) 40px;
-  align-items:center;
-  gap:12px;
-  height:40px;
-}
-#logModal .stepper .ctr button{
-  display:flex; align-items:center; justify-content:center;
-  width:40px; height:40px; padding:0; line-height:1; font-size:16px;
-}
-#logModal .stepper .ctr span{
-  display:flex; align-items:center; justify-content:center;
-  height:40px; min-width:68px; line-height:1; font-size:22px; font-weight:800;
-  font-variant-numeric: tabular-nums;
-}
 
 
 
