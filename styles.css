@@ -17,10 +17,17 @@
   --accent-weak: rgba(43,210,200,0.20);
 
   --chip-h:40px; --chip-px:14px; --radius:12px;
+  --done-bd:#21443f;      /* card border for done */
+  --done-pill:#1f5d55;    /* reps/sets pill border for done */
+  --done-text:#b6fff2;    /* reps/sets pill text for done */
 }
 body.annie{
   --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
   --accent-weak: rgba(201,167,255,0.22);
+  /* Dimmed purple for done state (border slightly translucent, pill a touch softer) */
+  --done-bd: rgba(var(--accent-r),var(--accent-g),var(--accent-b), 0.42);
+  --done-pill: rgba(var(--accent-r),var(--accent-g),var(--accent-b), 0.75);
+  --done-text: #efe6ff; /* light lavender text */
 }
 
 /* Resets */
@@ -160,8 +167,8 @@ button.ghost{
   border:1px solid var(--accent); border-radius:999px;
   min-width:98px; padding:8px 12px; white-space:nowrap; font-variant-numeric:tabular-nums;
 }
-.card.done{ border-color:#21443f; box-shadow:0 0 0 1px #21443f inset; }
-.card.done .repsets{ border-color:#1f5d55; color:#b6fff2; }
+.card.done{ border-color:var(--done-bd); box-shadow:0 0 0 1px var(--done-bd) inset; }
+.card.done .repsets{ border-color:var(--done-pill); color:var(--done-text); }
 
 /* DIALOGS (log + add) */
 dialog{ width:100%; max-width:520px; border:none; border-radius:20px; padding:0; background:#0d0e12; color:#fff; }
