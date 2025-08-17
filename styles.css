@@ -17,10 +17,17 @@
   --accent-weak: rgba(43,210,200,0.20);
 
   --chip-h:40px; --chip-px:14px; --radius:12px;
+  --done-bd:#21443f;      /* card border for done */
+  --done-pill:#1f5d55;    /* reps/sets pill border for done */
+  --done-text:#b6fff2;    /* reps/sets pill text for done */
 }
 body.annie{
   --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
   --accent-weak: rgba(201,167,255,0.22);
+  /* Dimmed purple for done state (border slightly translucent, pill a touch softer) */
+  --done-bd: rgba(var(--accent-r),var(--accent-g),var(--accent-b), 0.42);
+  --done-pill: rgba(var(--accent-r),var(--accent-g),var(--accent-b), 0.75);
+  --done-text: #efe6ff; /* light lavender text */
 }
 
 /* Resets */
@@ -136,8 +143,23 @@ button.ghost{
 .name-line{ display:flex; align-items:baseline; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .name{ font-weight:700; } /* match nav weight */
 .variation{ font-size:13px; color:#aeb0b9; font-weight:600; }
+
 .line.meta{ color:#aeb0b9; font-size:13px; }
 .line.weight{ color:#e8e9ef; font-size:14px; font-weight:700; }
+
+/* Subtle previous set line: (weight × reps × sets) */
+.prevline{
+  color:#aeb0b9;
+  opacity:.66;
+  font-size:12px;
+  font-weight:400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing:.1px;
+}
+.card .prevline{ margin-top:2px; }
+#logSub .prevline{ display:inline; margin:0 0 0 6px; }
+
+.weight .prevline{ font-weight:400; }
 
 .pill.repsets{
   display:inline-flex; align-items:center; justify-content:center;
@@ -145,40 +167,62 @@ button.ghost{
   border:1px solid var(--accent); border-radius:999px;
   min-width:98px; padding:8px 12px; white-space:nowrap; font-variant-numeric:tabular-nums;
 }
-.card.done{ border-color:#21443f; box-shadow:0 0 0 1px #21443f inset; }
-.card.done .repsets{ border-color:#1f5d55; color:#b6fff2; }
+.card.done{ border-color:var(--done-bd); box-shadow:0 0 0 1px var(--done-bd) inset; }
+.card.done .repsets{ border-color:var(--done-pill); color:var(--done-text); }
 
 /* DIALOGS (log + add) */
 dialog{ width:100%; max-width:520px; border:none; border-radius:20px; padding:0; background:#0d0e12; color:#fff; }
 dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
-.logform{ padding:16px; }
-.stack{ display:flex; flex-direction:column; gap:10px; }
-.stepper{ background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:10px; text-align:center; }
+.logform{ padding:24px; }
+.stack{ display:flex; flex-direction:column; gap:16px; }
+.stepper{ background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:14px; text-align:center; }
 .stepper label{ display:block; font-weight:700; font-size:12px; color:#c7c7d0; letter-spacing:.4px; }
-.stepper .ctr{ margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.stepper .ctr button{ width:44px; height:44px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff; }
-.stepper .ctr span{ font-size:28px; font-weight:800; letter-spacing:1px; display:inline-block; width:96px; text-align:center; }
-.seg{ display:flex; align-items:center; justify-content:space-between; background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:10px; }
+.stepper .ctr{ margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.stepper .ctr button{ width:40px; height:40px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff; }
+.stepper .ctr span{ font-size:24px; font-weight:800; letter-spacing:1px; display:inline-block; min-width:72px; text-align:center; }
+.seg{ display:flex; align-items:center; justify-content:space-between; background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:12px; }
 .seg span{ color:#c7c7d0; font-weight:700; font-size:12px; }
-.seg-buttons{ display:flex; gap:6px; }
-.seg-buttons button{ background:#15161b; border:1px solid #23242b; color:#fff; padding:8px 10px; border-radius:10px; }
-.seg-buttons button.active{ border-color:var(--accent); box-shadow: inset 0 0 0 2px var(--accent-weak); background:transparent; color:#e6fff9; }
-textarea{ width:100%; min-height:72px; background:#0f1015; border:1px solid #1f2028; border-radius:14px; padding:10px; color:#fff; }
+.seg-buttons{ display:flex; gap:8px; }
+.seg-buttons button{ flex:1; background:#15161b; border:1px solid #23242b; color:#fff; padding:10px 12px; border-radius:12px; }
+/* Removed background highlight from active buttons to rely on highlight bar */
+/* .seg-buttons button.active{ border-color:var(--accent); box-shadow: inset 0 0 0 2px var(--accent-weak); background:transparent; color:#e6fff9; } */
+textarea{ width:100%; min-height:72px; background:#0f1015; border:1px solid #1f2028; border-radius:14px; padding:12px; color:#fff; resize:none; }
 
 menu{ display:flex; gap:12px; justify-content:flex-end; margin:12px 0 0; padding:0; }
-menu .sp{ flex:1; }
-menu button{ height:var(--chip-h); padding:0 var(--chip-px); border-radius:var(--radius); border:1px dashed var(--line); background:#15161b; color:#fff; font-weight:700; }
-#btnLog{ background:var(--accent); border:1px solid var(--accent); color:#062822; font-weight:800; }
+menu .sp{ flex:1 1 0; min-width:0; }
+menu button{ height:var(--chip-h); padding:0 var(--chip-px); border-radius:var(--radius); border:1px dashed var(--line); background:#111216; color:#fff; font-weight:700; border-radius:12px; }
+#btnLog{ background:var(--accent); border:1px solid var(--accent); color:#05231e; font-weight:800; border-radius:12px; }
 
 /* SUMMARY period tabs */
-.period-tabs{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:10px 16px; position:sticky; top:56px; background:var(--glass); border-bottom:1px solid var(--glass-bd);}
-.period-tabs button{
-  height:var(--chip-h); padding:0 var(--chip-px);
-  background:var(--soft); color:var(--fg);
-  border:1px dashed var(--line); border-radius:var(--radius);
-  font-weight:700; font-size:13px;
+.period-tabs {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  position: sticky;
+  top: 56px;
+  background: var(--glass);
+  border-bottom: 1px solid var(--glass-bd);
 }
-.period-tabs button.active{ border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent-weak); background:transparent; }
+.period-tabs button {
+  height: var(--chip-h);
+  padding: 0 var(--chip-px);
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  outline: none;
+  box-shadow: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+.period-tabs button.active {
+  background: var(--accent);
+  color: #000;
+  border-radius: 8px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
 
 /* MISC */
 .group-title{ color:#c7c7d0; font-size:12px; letter-spacing:.2px; margin:14px 0 8px; padding: 0 16px; }
@@ -219,8 +263,8 @@ body[data-page="summary"] #otherTitle { display: none !important; }
 
 
 /* ---- v10: tame iOS blue focus ring & use accent ring ---- */
-button:focus { outline: none !important; }
-button:focus-visible { outline: none !important; }
+button:focus { outline: none; }
+button:focus-visible { outline: none; }
 
 /* More specific for our controls */
 .seg-buttons button:focus-visible,
@@ -229,8 +273,8 @@ button:focus-visible { outline: none !important; }
 .user-chip:focus-visible,
 .period-tabs button:focus-visible,
 button.ghost:focus-visible {
-  border-color: var(--accent) !important;
-  box-shadow: inset 0 0 0 2px var(--accent-weak), 0 0 0 2px rgba(0,0,0,0) !important;
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 
@@ -269,3 +313,215 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 /* more breathing room around map text */
 #mapWrap{ gap: 16px !important; }
 #mapWrap > div:last-child{ padding-left: 2px; }
+
+/* ===== Log modal layout overrides ===== */
+#logModal #logTitle{
+  text-align:center !important;
+  margin:6px 0 0 !important;
+  line-height:1.15 !important;
+}
+#logModal #logSub{
+  text-align:center !important;
+  margin:2px 0 12px !important;
+  line-height:1.2 !important;
+  display:block !important;
+}
+
+/* Remove default stack gap; use row margins for consistent spacing */
+#logModal .stack{ gap:0 !important; }
+/* Match vertical spacing between all rows (same as Fail Reps → Notes) */
+#logModal .stack .row{
+  margin:12px 0 !important;
+  display:grid;
+  gap:8px;
+}
+
+/* Side: Left / Both / Right as full-width grid */
+#sideSeg{
+  margin:6px 0 12px !important;
+  display:grid !important;
+  grid-template-columns:repeat(3, 1fr) !important;
+  gap:8px !important;
+}
+#sideSeg button{
+  width:100% !important;
+  justify-content:center !important;
+}
+
+/* ▲ ▼ buttons: center and size nicely */
+#logModal .stepper .up,
+#logModal .stepper .down{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  font-size:18px !important;
+  line-height:1 !important;
+  padding:0 !important;
+}
+
+/* Previous-set text consistency */
+.weight .prevline{ font-weight:400 !important; }
+#logSub .prevline{ display:inline !important; margin-left:6px !important; }
+
+
+/* --- Dialog Form Styling Fixes --- */
+.dialog-form {
+    padding: 20px;
+}
+
+.dialog-form .input-group {
+    margin-bottom: 16px;
+}
+
+.dialog-form input[type="text"],
+.dialog-form input[type="number"],
+.dialog-form textarea {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Equalize spacing between increment/decrement buttons */
+.dialog-form .counter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Button styling */
+.dialog-form button {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+}
+
+.dialog-form .primary-btn {
+    background-color: #00d1b2;
+    color: #000;
+}
+
+.dialog-form .primary-btn:hover {
+    background-color: #00b89c;
+}
+
+.dialog-form .secondary-btn {
+    background-color: #333;
+    color: #fff;
+}
+
+.dialog-form .secondary-btn:hover {
+    background-color: #444;
+}
+
+
+/* --- Log Modal Buttons (tidy) --- */
+#btnSkip{
+  background:transparent;
+  border:1px dashed var(--line);
+  color:var(--muted);
+  border-radius:12px;
+}
+#btnSkip:hover{ border-color:var(--fg-weak); color:var(--fg); }
+
+#btnCancel{
+  background:#171821;
+  border:1px solid #2a2b33;
+  color:#e6e6ea;
+  border-radius:12px;
+}
+#btnCancel:hover{ background:#1d1e27; }
+
+/* === Scoped log modal spacing (no impact to main page) === */
+#logModal .stack{ gap:0 !important; }
+#logModal .stack .row{ margin:12px 0 !important; }
+#logModal .stack .row > *{ margin-top:0 !important; margin-bottom:0 !important; }
+#logModal #sideSeg{ margin:12px 0 !important; }
+#logModal menu{ margin:12px 0 0 !important; }
+#logModal #logSub{ margin:2px 0 12px !important; }
+
+/* Adjust only vertical rhythm in log modal */
+#logModal .log-row + .log-row {
+  margin-top: 12px;
+}
+
+
+
+
+/* === Log modal: sliding filled highlight for Left / Both / Right === */
+#logModal #sideSeg{ position:relative; }
+#logModal #sideSeg .seg-buttons{
+  position:relative; overflow:hidden; border-radius:12px; padding:0; margin:0;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+  contain: layout paint; /* isolate layout/paint during slider transform */
+  height: 40px; /* fixed height to avoid reflow ripple effects */
+}
+#logModal #sideSeg .seg-buttons .highlight-bar{
+  position:absolute; top:0; left:0; width:33.3333%; height:100%;
+  background: var(--accent); border-radius:12px; z-index:0;
+  transition: transform 220ms ease;
+  pointer-events:none;      /* never affects layout/interaction */
+  will-change: transform;   /* smoother, avoids layout thrash */
+}
+#logModal #sideSeg .seg-buttons.left  .highlight-bar{ transform: translateX(0%); }
+#logModal #sideSeg .seg-buttons.both  .highlight-bar{ transform: translateX(100%); }
+#logModal #sideSeg .seg-buttons.right .highlight-bar{ transform: translateX(200%); }
+#logModal #sideSeg .seg-buttons button{
+  position:relative; z-index:1; background:transparent; border:none; color:#e6e6ea;
+  display:flex; align-items:center; justify-content:center; /* center in the 40px track */
+  height:100%;
+  line-height:1;
+  transform: translateY(-1px); /* nudge text upward slightly */
+}
+#logModal #sideSeg .seg-buttons.left  button[data-side="left"],
+#logModal #sideSeg .seg-buttons.both  button[data-side="both"],
+#logModal #sideSeg .seg-buttons.right button[data-side="right"]{ color:#0b0b0c; font-weight:800; }
+
+
+/* === Summary period tabs: refined filled slider (Week/Month/Year) === */
+#page-summary .period-tabs{
+  position:sticky; top:56px; z-index:40;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+  background:#0f1015;
+  border:1px solid #1f2028;
+  border-radius:16px;
+  padding:4px;
+  height:48px; /* ensure consistent geometry */
+}
+
+#page-summary .period-tabs .highlight-bar{
+  position:absolute; top:4px; left:4px;
+  width:calc(33.3333% - 8px); height:calc(100% - 8px);
+  background:var(--accent);
+  border-radius:12px;
+  transition:transform 220ms ease;
+  will-change:transform;
+  pointer-events:none;
+  z-index:0;
+}
+
+#page-summary .period-tabs.week  .highlight-bar{ transform:translateX(0%); }
+#page-summary .period-tabs.month .highlight-bar{ transform:translateX(100%); }
+#page-summary .period-tabs.year  .highlight-bar{ transform:translateX(200%); }
+
+#page-summary .period-tabs button{
+  position:relative; z-index:1;
+  background:transparent; border:none; outline:none;
+  color:#e6e6ea;
+  display:flex; align-items:center; justify-content:center; /* vertical centering */
+  height:100%;
+  margin:0; padding:2px 14px 0 14px; /* nudge text downward slightly */
+  line-height:1;                       /* avoid baseline lift */
+  border-radius:12px; font-weight:700;
+  transform:none;                      /* cancel any global nudge */
+}
+
+#page-summary .period-tabs.week  button[data-period="week"],
+#page-summary .period-tabs.month button[data-period="month"],
+#page-summary .period-tabs.year  button[data-period="year"]{
+  color:#0b0b0c; font-weight:800;
+}

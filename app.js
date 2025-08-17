@@ -5,8 +5,14 @@ const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbzQmuBTqcODPLJc2U1GhIgKEK_xaa0buIdC55mIWv1hg7QoXwyxe36tMNfjyl3HIWFKew/exec',
   TOKEN: 'n7V6p3kFQw9zL1r8U2y4T0bC5mA7',
   WEEK_START: 1,
-  REP_MIN: 6,
+  REP_MIN: 8,
   REP_MAX: 12,
+  OVERPERF_RATIO_2X: 2.0,      // ≥2× planned reps → big jump
+  OVERPERF_RATIO_1P5X: 1.5,    // ≥1.5× planned reps → medium jump
+  OVERPERF_BIG_INC_STEPS: 2,   // +2 increments for ≥2×
+  OVERPERF_MED_INC_STEPS: 1,   // +1 increment for ≥1.5×
+  RPE_VERY_HIGH: 9.5,          // deload threshold
+  RPE_OK_FOR_REP_UP: 9,        // allowed to add reps
   DEFAULT_INC_LB: 5,
   DONE_TTL_HOURS: 8,
 };
@@ -30,8 +36,8 @@ const store = {
 };
 
 // Keep data fresh on resume
-setInterval(()=>{ if(document.visibilityState==='visible') fetchAll(); }, 10*60*1000);
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') fetchAll(); });
+setInterval(()=>{ if(document.visibilityState==='visible') refreshFromBackend(); }, 10*60*1000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') refreshFromBackend(); });
 
 // DOM helpers
 const $  = (q, root=document)=>root.querySelector(q);
@@ -48,9 +54,31 @@ const $$ = (q, root=document)=>Array.from(root.querySelectorAll(q));
   }, { passive:false });
 })();
 
+// ==== LocalStorage (per-user namespace) ====
+function _nsKey(base){ const uid = (state && state.userId) || 'u_camp'; return `${base}:${uid}`; }
+function _loadMap(base){ try{ return JSON.parse(localStorage.getItem(_nsKey(base))||'{}'); }catch(_){ return {}; } }
+function _saveMap(base, obj){ localStorage.setItem(_nsKey(base), JSON.stringify(obj||{})); }
+// One-time migration: copy legacy unscoped keys into current user's namespace if the namespaced key is missing
+(function _migrateLegacy(){ try{
+  const uid = (state && state.userId) || 'u_camp';
+  ['doneMap','lastSide'].forEach(base=>{
+    const ns = _nsKey(base);
+    if(!localStorage.getItem(ns) && localStorage.getItem(base)){
+      const obj = JSON.parse(localStorage.getItem(base)||'{}');
+      localStorage.setItem(ns, JSON.stringify(obj));
+    }
+  });
+} catch(_){} })();
+
 // ==== Small helpers ====
 function fmt(n){ return Number(n||0).toFixed(0); }
-function today(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function today(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`; // local YYYY-MM-DD to avoid off-by-one
+}
 function startOfPeriod(period){
   const d=new Date();
   if(period==='week'){ const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
@@ -68,22 +96,76 @@ function equipDisplay(lbl){
   return s.replace(/\b\w/g,c=>c.toUpperCase())
           .replace(/\bEz\b/g,'EZ').replace(/\bV Bar\b/g,'V-Bar');
 }
-function markDone(exId){
-  const map=JSON.parse(localStorage.getItem('doneMap')||'{}'); map[exId]=Date.now();
-  localStorage.setItem('doneMap', JSON.stringify(map));
+function markDone(exId){ const map=_loadMap('doneMap'); map[exId]=Date.now(); _saveMap('doneMap', map); }
+function isDone(exId){ const map=_loadMap('doneMap'); const ts=map[exId]; if(!ts) return false; const ageH=(Date.now()-ts)/(1000*60*60); return ageH<CONFIG.DONE_TTL_HOURS; }
+function chooseSide(exId){ const s=_loadMap('lastSide'); return s[exId]||'both'; }
+function saveSide(exId, side){ const s=_loadMap('lastSide'); s[exId]=side; _saveMap('lastSide', s); }
+
+// === Period tabs (Week/Month/Year) sliding pill helper ===
+function ensurePeriodSlider(container, current){
+  if(!container) return;
+  // Ensure bar exists under buttons
+  let bar = container.querySelector('.highlight-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.className = 'highlight-bar';
+    container.insertBefore(bar, container.firstChild);
+  }
+
+  // Determine target period and target button
+  const val = (current||'week');
+  const targetBtn = container.querySelector(`button[data-period="${val}"]`) ||
+                    container.querySelector('button.active') ||
+                    container.querySelector('button');
+
+  // Maintain container class for CSS fallbacks
+  container.classList.remove('week','month','year');
+  container.classList.add(val);
+
+  // Sync legacy active/aria state
+  container.querySelectorAll('button').forEach(b=>{
+    const p = (b.dataset.period || b.textContent.trim().toLowerCase());
+    const on = (p===val);
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+
+  // Pixel-perfect position/size for the pill
+  try{
+    const cRect = container.getBoundingClientRect();
+    const bRect = targetBtn.getBoundingClientRect();
+    const padL = parseFloat(getComputedStyle(container).paddingLeft)||0;
+    const left  = Math.round((bRect.left - cRect.left) - padL);
+    const width = Math.round(bRect.width);
+    bar.style.width = width + 'px';
+    bar.style.transform = `translateX(${left}px)`; // overrides class-based 0/100/200% if present
+  }catch(_){ /* no-op if layout not ready */ }
+
+  // Reposition on resize once per container
+  if(!container.dataset.periodResizeBound){
+    container.dataset.periodResizeBound = '1';
+    window.addEventListener('resize', ()=>{
+      const active = container.querySelector('button.active');
+      const cur = active ? (active.dataset.period || active.textContent.trim().toLowerCase()) : val;
+      ensurePeriodSlider(container, cur);
+    });
+  }
+
+  // Also re-sync next frame to catch font/layout late changes
+  requestAnimationFrame(()=>{
+    const active = container.querySelector('button.active');
+    const cur = active ? (active.dataset.period || active.textContent.trim().toLowerCase()) : val;
+    try{ const _=container.offsetWidth; }catch(_){}
+    try{ ensurePeriodSlider(container, cur); }catch(_){}
+  });
 }
-function isDone(exId){
-  const map=JSON.parse(localStorage.getItem('doneMap')||'{}'); const ts=map[exId];
-  if(!ts) return false; const ageH=(Date.now()-ts)/(1000*60*60); return ageH<CONFIG.DONE_TTL_HOURS;
-}
-function chooseSide(exId){ const s=JSON.parse(localStorage.getItem('lastSide')||'{}'); return s[exId]||'both'; }
-function saveSide(exId, side){ const s=JSON.parse(localStorage.getItem('lastSide')||'{}'); s[exId]=side; localStorage.setItem('lastSide', JSON.stringify(s)); }
 
 // ==== User scoping (strict) ====
 // Exercises: ONLY the current user's exercises. No shared defaults.
 function exercisesForUser(){
-  const uid=state.userId;
-  return state.exercises.filter(e => (e.owner||'').toLowerCase() === uid);
+  // Show all exercises (shared library).
+  // Logs & “latest” are still per-user via logsForUser().
+  return state.exercises || [];
 }
 // Logs: ONLY the current user's logs.
 function logsForUser(){
@@ -102,6 +184,24 @@ function latestFor(exId, side){
   const arr = same.length ? same : valid;
   arr.sort((a,b)=> new Date(b.timestamp||b.date) - new Date(a.timestamp||a.date));
   return arr[0] || null;
+}
+
+// ---- Previous-set display helpers ----
+function _prevTripletData(exId, side){
+  const last = latestFor(exId, side);
+  if(!last) return null;
+  const w = fmt(last.weight_lb);
+  const r = fmt(last.planned_reps);
+  const s = fmt(last.sets_done || (state.byId[exId]?.sets) || 3);
+  return { w, r, s };
+}
+function prevLineCardHTML(exId, side){
+  const d = _prevTripletData(exId, side);
+  return d ? `<div class="prevline">(${d.w}x${d.r}x${d.s})</div>` : '';
+}
+function prevLineInlineHTML(exId, side){
+  const d = _prevTripletData(exId, side);
+  return d ? ` <span class="prevline">(${d.w}x${d.r}x${d.s})</span>` : '';
 }
 function suggestNext(exId, side){
   const ex = state.byId[exId]; 
@@ -203,17 +303,7 @@ async function fetchAll(){
 
 // Robust nav binding
 function bindNav(){
-  document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-nav]'); if(!btn) return;
-    e.preventDefault();
-    const page = btn.dataset.nav;           // 'list' or 'summary'
-    document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('active', b===btn));
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const target = document.getElementById('page-' + page);
-    if (target) target.classList.add('active');
-    state.page = page; store.set({ page });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, true);
+  
 }
 
 // Restore UI
@@ -230,13 +320,21 @@ function bindNav(){
 // Period tabs
 document.addEventListener('click', (e)=>{
   const btn = e.target.closest('.period-tabs button'); if(!btn) return;
-  const wrap = btn.parentElement;
-  wrap.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  state.period = btn.dataset.period || btn.textContent.toLowerCase();
+  const wrap = btn.closest('.period-tabs') || btn.parentElement;
+  const val = (btn.dataset.period || btn.textContent.toLowerCase());
+  ensurePeriodSlider(wrap, val); // slide the pill + sync legacy state
+  state.period = val;
   store.set({period: state.period});
   renderSummary();
 });
+
+(function(){
+  const cont = document.querySelector('.period-tabs');
+  if(!cont) return;
+  const activeBtn = cont.querySelector('button.active');
+  const cur = state.period || (activeBtn ? (activeBtn.dataset.period || activeBtn.textContent.trim().toLowerCase()) : 'week');
+  ensurePeriodSlider(cont, cur);
+})();
 
 // ==== Filters & chips ====
 function renderUserChips(){
@@ -247,14 +345,21 @@ function renderUserChips(){
     const uid = btn.dataset.user;
     if (byId[uid]) btn.textContent = byId[uid];
     btn.classList.toggle('active', uid === state.userId);
-    btn.onclick = () => {
+    btn.onclick = async () => {
       state.userId = uid; store.set({ userId: uid });
       document.body.classList.toggle('annie', state.userId === 'u_annie');
       row.querySelectorAll('.user-chip').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      // After switching users, rebuild byId based on that user's exercises
+
+      // Pull fresh data (so manual sheet edits are reflected)
+      await refreshFromBackend();
+
+      // After refresh, rebuild byId using the shared library
       state.byId = Object.fromEntries(exercisesForUser().map(e=>[e.id, e]));
-      renderFilters(); renderList(); renderSummary();
+
+      renderFilters();
+      renderList();
+      renderSummary();
     };
   });
   document.body.classList.toggle('annie', state.userId === 'u_annie');
@@ -287,7 +392,7 @@ function renderFilters(){
 
   // add/reset
   $('#btnAddExercise').onclick = ()=> openAddWizard();
-  $('#btnResetDone').onclick   = ()=>{ localStorage.removeItem('doneMap'); renderList(); toast('Highlights reset'); };
+  $('#btnResetDone').onclick   = ()=>{ localStorage.removeItem(_nsKey('doneMap')); renderList(); };
   $('#btnResetDone').textContent = 'Reset';
 }
 
@@ -305,7 +410,9 @@ function makeCardHTML(e){
     <div class="left">
       <div class="name-line"><span class="name">${e.name}</span>${variation}</div>
       <div class="meta line">${setupLine || '&nbsp;'}</div>
-      <div class="weight line">${fmt(sugg.weight)} lb</div>
+      <div class="weight line">
+        ${fmt(sugg.weight)} lb ${prevLineInlineHTML(e.id, chooseSide(e.id))}
+      </div>
     </div>
     <div class="pill repsets">${fmt(sugg.reps)} × ${fmt(sugg.sets)}</div>
   </div>`;
@@ -366,30 +473,301 @@ let modal, stepVals, curEx;
 
 function openLog(exId){
   curEx=state.byId[exId]; if(!curEx) return;
-  modal=$('#logModal'); modal.dataset.didOther='';
+  modal=$('#logModal');
+  modal.dataset.didOther='';
+  delete modal.dataset.arranged; // ensure arrangeLogLayout() re-runs each open
 
-  $('#logTitle').textContent=curEx.name;
-  $('#logSub').textContent=[musclesOf(curEx).filter(Boolean).join('/'), curEx.equipment].filter(Boolean).join(' • ');
+  $('#logTitle').textContent = curEx.name;
+  const baseSub = [musclesOf(curEx).filter(Boolean).join('/'), curEx.equipment].filter(Boolean).join(' • ');
+  $('#logSub').innerHTML = baseSub + prevLineInlineHTML(exId, chooseSide(exId));
 
-  const side = chooseSide(exId);
-  $('#sideSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.side===side));
+  // Patch: always start unilateral exercises on right, bilateral stays both
+  let side = chooseSide(exId);
+  if (side !== 'both') side = 'right';
+
+  const seg = $('#sideSeg');
+  const wrap = seg.querySelector('.seg-buttons') || seg;
+  // Clear any lingering active/selected classes (remove legacy classes)
+  wrap.querySelectorAll('button').forEach(b=>b.classList.remove('active','selected','current','is-active'));
+  // Enforce visual order: Left, Both, Right
+  ['left','both','right'].forEach(key=>{
+    const b = wrap.querySelector(`button[data-side="${key}"]`);
+    if(b) wrap.appendChild(b);
+  });
+  // Activate exactly one — prefer saved side; otherwise Both
+  const toActivate = wrap.querySelector(`button[data-side="${side}"]`) || wrap.querySelector('button[data-side="both"]');
+  if(toActivate) toActivate.classList.add('active');
+  // Sync focus & aria to avoid a second visual highlight from :focus styles
+  wrap.querySelectorAll('button').forEach(b=>{
+    b.setAttribute('aria-pressed','false');
+    try { b.blur(); } catch(_){}
+  });
+  if (toActivate) {
+    toActivate.setAttribute('aria-pressed','true');
+  }
 
   const s=suggestNext(exId, side);
   stepVals={ side, sets_done:Number(curEx.sets||3), planned_reps:s.reps, weight_lb:s.weight, height:Number(s.height||0), fail_reps:s.reps, rpe_set2:8 };
   updateSteppers();
   $('#logNotes').value='';
+  arrangeLogLayout();
 
-  // side toggle
-  $('#sideSeg').onclick = (e)=>{
-    const b=e.target.closest('button'); if(!b) return;
-    $('#sideSeg').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); stepVals.side=b.dataset.side;
-    saveSide(curEx.id, stepVals.side);
-    const s=suggestNext(curEx.id, stepVals.side);
-    stepVals.weight_lb=s.weight; stepVals.planned_reps=s.reps; stepVals.height=s.height; updateSteppers();
+  // side toggle (updated: container class approach)
+  (function() {
+    const sideToggle = document.querySelector('#sideSeg .seg-buttons') || document.getElementById('sideSeg');
+    if (!sideToggle) return;
+    const sideButtons = sideToggle.querySelectorAll('button');
+    // Ensure container has slider class and a single highlight bar for smooth animation
+    sideToggle.classList.add('side-toggle');
+    if (!sideToggle.querySelector('.highlight-bar')) {
+      const bar = document.createElement('div');
+      bar.className = 'highlight-bar';
+      sideToggle.appendChild(bar);
+    }
+    // Remove any prior event listeners by replacing onclick
+    sideButtons.forEach(btn => {
+      btn.onclick = null;
+    });
+    sideButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const value = btn.dataset.side;
+        // Remove .left, .both, .right classes from container
+        sideToggle.classList.remove('left', 'both', 'right');
+        sideToggle.classList.add(value);
+        stepVals.side = value;
+        // Update aria/focus so only the chosen button has the focus highlight
+        sideButtons.forEach(x => {
+          x.setAttribute('aria-pressed','false');
+        });
+        btn.setAttribute('aria-pressed','true');
+        try { btn.focus({ preventScroll: true }); } catch(_){}
+        saveSide(curEx.id, stepVals.side);
+        const s = suggestNext(curEx.id, stepVals.side);
+        stepVals.weight_lb = s.weight; stepVals.planned_reps = s.reps; stepVals.height = s.height; updateSteppers();
+        $('#logSub').innerHTML = baseSub + prevLineInlineHTML(curEx.id, stepVals.side);
+        arrangeLogLayout();
+        // Keep legacy button active state (fallback) while slider animates
+        sideButtons.forEach(x => x.classList.toggle('active', x === btn));
+      });
+    });
+    // Set initial container class
+    const currentValue = stepVals.side || 'both';
+    sideToggle.classList.remove('left','both','right');
+    sideToggle.classList.add(currentValue);
+    // Sync legacy active state on load
+    sideButtons.forEach(x => x.classList.toggle('active', x.dataset.side === currentValue));
+  })();
+
+  // Run layout now; show modal
+  arrangeLogLayout();
+  modal.showModal();
+  // Ensure focus lands on the active side button (prevents extra focus highlight on Left)
+  setTimeout(()=>{
+    const activeBtn = wrap.querySelector('button.active');
+    if(activeBtn){ try { activeBtn.focus({ preventScroll: true }); } catch(_){} }
+  }, 0);
+}
+
+// Re-arrange the log modal UI (rows & buttons) and tweak styles
+function arrangeLogLayout(){
+  const modal = $('#logModal');
+  if(!modal) return;
+  const VSPACE = '12px'; // single source of truth for vertical spacing
+  // Helper to parse pixel values
+  const px = v => {
+    const n = parseFloat(String(v||'').replace('px',''));
+    return Number.isFinite(n) ? n : 0;
   };
 
-  modal.showModal();
+  // Header: move title+subtitle up together and keep a small gap between them
+  const formWrap = modal.querySelector('.logform');
+  if (formWrap){
+    // Reduce top padding so the whole header sits higher
+    formWrap.style.setProperty('padding-top','12px','important'); // was 24px in CSS
+  }
+  const title = $('#logTitle');
+  const sub   = $('#logSub');
+  if (title){
+    title.style.setProperty('text-align','center','important');
+    title.style.setProperty('margin-top','0','important');
+    title.style.setProperty('padding-top','0','important');
+    title.style.setProperty('padding-bottom','4px','important'); // tighter gap to subtitle
+    title.style.setProperty('line-height','1.15','important');
+  }
+  if (sub){
+    sub.style.setProperty('text-align','center','important');
+    sub.style.setProperty('margin-top','0','important');
+    sub.style.setProperty('margin-bottom','12px','important'); // overall header-to-content spacing
+    sub.style.setProperty('line-height','1.2','important');
+    sub.style.setProperty('display','block','important');
+  }
+
+  // Breathing space below side segment and layout/label tweaks
+  const sideSeg = $('#sideSeg');
+  if (sideSeg){
+    // Ensure container itself doesn't constrain width
+    sideSeg.style.setProperty('padding','0','important');
+    sideSeg.style.setProperty('margin',`6px 0 ${VSPACE}`,'important');
+    sideSeg.style.setProperty('display','block','important');
+    sideSeg.style.setProperty('width','100%','important');
+
+    // Remove the "Side" label/text element if present
+    const labelEl = sideSeg.querySelector(':scope > span, :scope > .label');
+    if(labelEl){
+      try { labelEl.remove(); } catch(_) { labelEl.style.setProperty('display','none','important'); }
+    }
+
+    // Grid the three buttons to span evenly full width, no gaps
+    const btnWrap = sideSeg.querySelector('.seg-buttons') || sideSeg;
+    btnWrap.style.setProperty('display','grid','important');
+    btnWrap.style.setProperty('grid-template-columns','repeat(3, 1fr)','important');
+    btnWrap.style.setProperty('grid-auto-rows','1fr','important');
+    btnWrap.style.setProperty('gap','0','important');
+    btnWrap.style.setProperty('width','100%','important');
+    btnWrap.style.setProperty('margin','0','important');
+
+    btnWrap.querySelectorAll('button').forEach(b=>{
+      b.style.setProperty('width','100%','important');
+      b.style.setProperty('min-width','0','important');
+      b.style.setProperty('justify-content','center','important');
+      b.style.setProperty('border-radius','0','important'); // let grid edges meet
+      b.style.setProperty('box-sizing','border-box','important');
+    });
+
+    // Round only the outer corners so the row still looks like a pill group
+    const btns = btnWrap.querySelectorAll('button');
+    if(btns.length>=3){
+      btns[0].style.setProperty('border-top-left-radius','12px','important');
+      btns[0].style.setProperty('border-bottom-left-radius','12px','important');
+      btns[1].style.setProperty('border-radius','0','important');
+      btns[2].style.setProperty('border-top-right-radius','12px','important');
+      btns[2].style.setProperty('border-bottom-right-radius','12px','important');
+    }
+  }
+
+  // Notes breathing space: use whatever CSS currently sets (this is our reference)
+  let refGapPx = 0;
+  const notes = $('#logNotes');
+  if(notes){
+    const notesWrap = notes.closest('.field') || notes.parentElement;
+    if(notesWrap){
+      const cs = getComputedStyle(notesWrap);
+      refGapPx = px(cs.marginTop) || 0;
+    }
+  }
+  // Fallback if CSS reports 0 (keep prior default)
+  if(!refGapPx) refGapPx = px(VSPACE) || 12;
+
+  // Stack container and steppers — drive spacing via container gap only
+  const stack = modal.querySelector('.stack');
+  if(!stack) return;
+  stack.style.setProperty('gap', refGapPx + 'px', 'important');
+  stack.style.setProperty('margin','0','important');
+  // Clear any lingering pulse classes from previous interactions
+  stack.querySelectorAll('.stepper').forEach(n => n.classList.remove('pulse-up','pulse-down'));
+
+  // Helper to fetch a stepper by field
+  const getStep = (field)=> stack.querySelector(`.stepper[data-field="${field}"]`);
+
+  // Make arrow buttons ▲ ▼ instead of +/-
+  stack.querySelectorAll('.stepper .up').forEach(b=>{ b.textContent='▲'; b.setAttribute('aria-label','Increase'); });
+  stack.querySelectorAll('.stepper .down').forEach(b=>{ b.textContent='▼'; b.setAttribute('aria-label','Decrease'); });
+  // Style normalization for arrow buttons (up/down)
+  stack.querySelectorAll('.stepper .up, .stepper .down').forEach(b=>{
+    b.style.setProperty('display','flex','important');
+    b.style.setProperty('align-items','center','important');
+    b.style.setProperty('justify-content','center','important');
+    b.style.setProperty('font-size','18px','important');
+    b.style.setProperty('line-height','1','important');
+    b.style.setProperty('padding','0','important');
+    b.style.setProperty('min-width','34px','important');
+    b.style.setProperty('height','34px','important');
+  });
+
+  // Create rows (spacing only via class, not inline style)
+  const row = (cols)=>{
+    const d=document.createElement('div');
+    d.className='row';
+    d.style.setProperty('display','grid','important');
+    d.style.setProperty('grid-template-columns',`repeat(${cols}, 1fr)`,'important');
+    d.style.removeProperty('gap');
+    d.style.setProperty('margin','0','important');
+    d.style.removeProperty('padding');
+    return d;
+  };
+  const row2a = row(2); // Set + Rep
+  const row2b = row(2); // Weight + Height
+  const row1  = row(1); // RPE
+  const row1b = row(1); // Fail reps
+
+  // Move steppers into new layout
+  const setStep   = getStep('sets_done');
+  const repsStep  = getStep('planned_reps');
+  const wtStep    = getStep('weight_lb');
+  const hStep     = getStep('height');
+  const rpeStep   = getStep('rpe_set2');
+  const failStep  = getStep('fail_reps');
+
+  if(setStep && repsStep){ row2a.appendChild(setStep); row2a.appendChild(repsStep); }
+  if(wtStep && hStep){     row2b.appendChild(wtStep);  row2b.appendChild(hStep); }
+  if(rpeStep)  row1.appendChild(rpeStep);
+  if(failStep) row1b.appendChild(failStep);
+
+  // Clear stack and re-append in desired order
+  const old = Array.from(stack.children);
+  old.forEach(n=>{ /* detach all children first */ });
+  stack.innerHTML='';
+  stack.appendChild(row2a);
+  stack.appendChild(row2b);
+  stack.appendChild(row1);
+  stack.appendChild(row1b);
+  // Ensure a clear gap after the last row before Notes
+  row1b.style.setProperty('margin-bottom', refGapPx + 'px', 'important');
+
+  // Ensure spacing above Notes matches the reference gap using a resilient spacer (no margin-collapsing)
+  const notesEl = document.getElementById('logNotes');
+  if (notesEl) {
+    const notesWrap2 = notesEl.closest('.field') || notesEl.parentElement;
+    if (notesWrap2 && notesWrap2.parentElement) {
+      // Remove any previous margin to avoid doubling
+      try { notesWrap2.style.removeProperty('margin-top'); } catch(_) {}
+      const prev = notesWrap2.previousElementSibling;
+      if (!(prev && prev.classList && prev.classList.contains('gap-spacer'))) {
+        const sp = document.createElement('div');
+        sp.className = 'gap-spacer';
+        sp.style.height = refGapPx + 'px';
+        sp.style.width = '100%';
+        sp.style.pointerEvents = 'none';
+        sp.style.display = 'block';
+        notesWrap2.parentElement.insertBefore(sp, notesWrap2);
+      } else {
+        prev.style.height = refGapPx + 'px';
+      }
+    }
+  }
+
+  // Align actions: Skip left; Cancel + Log on the right, with Log at far right
+  const btnSkip   = $('#btnSkip');
+  const btnCancel = $('#btnCancel');
+  const btnLog    = $('#btnLog');
+  const actions   = (btnSkip || btnCancel || btnLog) ? (btnSkip?.parentElement || btnCancel?.parentElement || btnLog?.parentElement) : null;
+  if(actions){
+    actions.style.display='flex';
+    actions.style.alignItems='center';
+    actions.style.gap='8px';
+    // Ensure Skip is first in DOM
+    if(btnSkip) actions.prepend(btnSkip);
+    // Build a right box for cancel+log
+    const rightBox = document.createElement('div');
+    rightBox.style.display='inline-flex';
+    rightBox.style.gap='8px';
+    rightBox.style.marginLeft='auto';
+    if(btnCancel) rightBox.appendChild(btnCancel);
+    if(btnLog)    rightBox.appendChild(btnLog); // log on the far right
+    actions.appendChild(rightBox);
+    // Ensure the actions bar sits the same distance from the Notes block
+    actions.style.marginTop = refGapPx + 'px';
+  }
 }
 
 function updateSteppers(){
@@ -487,7 +865,7 @@ async function saveExercise(){
     default_weight: Number($('#exW').value||0),
     default_height: Number($('#exH').value||0),
     increment_lb: $('#exInc').value.trim(),
-    owner: state.userId || 'u_camp'
+    owner: 'shared'
   };
   if(!body.name){ alert('Name required'); btn.dataset.busy='0'; btn.disabled=false; btn.textContent=orig; return; }
   try{
@@ -823,23 +1201,18 @@ function rankImprovements(period){
 
 // Local done map helpers
 function setDoneLocal(exId, tsOrNull){
-  const map = JSON.parse(localStorage.getItem('doneMap')||'{}');
-  if (tsOrNull == null) delete map[exId];
-  else map[exId] = tsOrNull;
-  localStorage.setItem('doneMap', JSON.stringify(map));
+  const map = _loadMap('doneMap');
+  if (tsOrNull == null) delete map[exId]; else map[exId] = tsOrNull;
+  _saveMap('doneMap', map);
 }
 function optimisticMarkDone(exId){
-  const map = JSON.parse(localStorage.getItem('doneMap')||'{}');
+  const map = _loadMap('doneMap');
   const prev = Object.prototype.hasOwnProperty.call(map, exId) ? map[exId] : null;
-
-  // Apply highlight immediately
   setDoneLocal(exId, Date.now());
   const card = document.querySelector(`.card[data-id="${exId}"]`);
   if (card) card.classList.add('done');
   flash();
   try { if (navigator.vibrate) navigator.vibrate(15); } catch (_) {}
-
-  // Rollback if API fails
   return () => {
     if (prev === null) setDoneLocal(exId, null); else setDoneLocal(exId, prev);
     if (card) card.classList.remove('done');
@@ -852,7 +1225,16 @@ function tinyHaptic(){ try { if (navigator.vibrate) navigator.vibrate(5); } catc
 function stepperPulse(node, dir){
   node.classList.remove('pulse-up','pulse-down');
   void node.offsetWidth; // reflow to restart animation
-  node.classList.add(dir === 'up' ? 'pulse-up' : 'pulse-down');
+  const cls = (dir === 'up') ? 'pulse-up' : 'pulse-down';
+  node.classList.add(cls);
+  const done = (e)=>{
+    if(e && e.target !== node) return; // ignore bubbled events
+    node.classList.remove(cls);
+    node.removeEventListener('animationend', done);
+  };
+  node.addEventListener('animationend', done);
+  // Fallback in case animationend doesn’t fire
+  setTimeout(done, 500);
 }
 
 // Override updateSteppers to add pulses on up/down
@@ -908,7 +1290,7 @@ async function submitLog(skip){
         stepVals.side = nextSide; saveSide(curEx.id, nextSide);
         const s2 = suggestNext(curEx.id, nextSide);
         stepVals.weight_lb=s2.weight; stepVals.planned_reps=s2.reps; stepVals.height=s2.height; updateSteppers();
-        toast(`Logged ${sideUsed}. Now ${nextSide}.`);
+        // toast(`Logged ${sideUsed}. Now ${nextSide}.`);
       } else {
         modal.dataset.didOther='';
         modal.close();
@@ -941,102 +1323,261 @@ document.addEventListener('click', (e)=>{
 // ====== PATCH v11 — instant-close modal on Log/Skip (background write) ======
 async function submitLog(skip){
   const sideUsed = stepVals.side || 'both';
+  const modalEl = document.getElementById('logModal');
 
   // Optimistic highlight immediately
   const rollback = optimisticMarkDone(curEx.id);
 
-  // Close the modal right away so it feels instant
-  try { document.getElementById('logModal').close(); } catch(_){}
-
-  const payload = {
-    timestamp: new Date().toISOString(),
-    date: today(),
-    user_id: state.userId || 'u_camp',
-    exercise_id: curEx.id,
-    side: sideUsed,
-    sets_done: Number(stepVals.sets_done),
-    planned_reps: Number(stepVals.planned_reps),
-    weight_lb: Number(stepVals.weight_lb),
-    height: Number(stepVals.height||0),
-    rpe_set2: Number(stepVals.rpe_set2),
-    fail_reps: Number(stepVals.fail_reps),
-    skip_progress: skip ? 1 : '',
-    notes: $('#logNotes').value||''
-  };
-
-  // Fire-and-handle in background; UI is already updated
-  apiPost('addLog', payload)
-    .then(res => {
-      if(res && !res.error){
-        fetchAll(); // refresh silently
-      }else{
-        rollback(); toast('Error saving log');
-      }
-    })
-    .catch(()=>{ rollback(); toast('Network error'); });
+  // Determine the next action based on side
+  if (sideUsed === 'right') {
+    // Save log for right, but do NOT close modal.
+    // Switch to left side, update UI highlight, keep modal open.
+    // Save right log in background
+    const payload = {
+      timestamp: new Date().toISOString(),
+      date: today(),
+      user_id: state.userId || 'u_camp',
+      exercise_id: curEx.id,
+      side: sideUsed,
+      sets_done: Number(stepVals.sets_done),
+      planned_reps: Number(stepVals.planned_reps),
+      weight_lb: Number(stepVals.weight_lb),
+      height: Number(stepVals.height||0),
+      rpe_set2: Number(stepVals.rpe_set2),
+      fail_reps: Number(stepVals.fail_reps),
+      skip_progress: skip ? 1 : '',
+      notes: $('#logNotes').value||''
+    };
+    apiPost('addLog', payload)
+      .then(res => {
+        if(res && !res.error){
+          fetchAll();
+        }else{
+          rollback(); toast('Error saving log');
+        }
+      })
+      .catch(()=>{ rollback(); toast('Network error'); });
+    // Switch UI to left
+    stepVals.side = 'left';
+    saveSide(curEx.id, 'left');
+    // Update active highlight for side buttons
+    const seg = $('#sideSeg');
+    const wrap = seg.querySelector('.seg-buttons') || seg;
+    // Slider container/bar setup (ensure matches openLog)
+    const sideToggle2 = wrap; // container for sliding bar
+    sideToggle2.classList.add('side-toggle');
+    if (!sideToggle2.querySelector('.highlight-bar')) {
+      const bar = document.createElement('div');
+      bar.className = 'highlight-bar';
+      sideToggle2.appendChild(bar);
+    }
+    wrap.querySelectorAll('button').forEach(b=>{
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed','false');
+    });
+    const leftBtn = wrap.querySelector('button[data-side="left"]');
+    if(leftBtn){
+      leftBtn.classList.add('active');
+      leftBtn.setAttribute('aria-pressed','true');
+      try { leftBtn.focus({ preventScroll: true }); } catch(_){}
+    }
+    // Also update container class for slider
+    sideToggle2.classList.remove('left','both','right');
+    sideToggle2.classList.add('left');
+    // Update values for left suggestion
+    const s2 = suggestNext(curEx.id, 'left');
+    stepVals.weight_lb = s2.weight;
+    stepVals.planned_reps = s2.reps;
+    stepVals.height = s2.height;
+    updateSteppers();
+    // Update prev line (subheader)
+    const baseSub = [musclesOf(curEx).filter(Boolean).join('/'), curEx.equipment].filter(Boolean).join(' • ');
+    $('#logSub').innerHTML = baseSub + prevLineInlineHTML(curEx.id, 'left');
+    arrangeLogLayout();
+    // toast('Logged right. Now left.');
+    // Do NOT close modal
+    return;
+  } else if (sideUsed === 'left') {
+    // Save log for left, then close modal
+    const payload = {
+      timestamp: new Date().toISOString(),
+      date: today(),
+      user_id: state.userId || 'u_camp',
+      exercise_id: curEx.id,
+      side: sideUsed,
+      sets_done: Number(stepVals.sets_done),
+      planned_reps: Number(stepVals.planned_reps),
+      weight_lb: Number(stepVals.weight_lb),
+      height: Number(stepVals.height||0),
+      rpe_set2: Number(stepVals.rpe_set2),
+      fail_reps: Number(stepVals.fail_reps),
+      skip_progress: skip ? 1 : '',
+      notes: $('#logNotes').value||''
+    };
+    try { if(modalEl) modalEl.close(); } catch(_){}
+    apiPost('addLog', payload)
+      .then(res => {
+        if(res && !res.error){
+          fetchAll();
+        }else{
+          rollback(); toast('Error saving log');
+        }
+      })
+      .catch(()=>{ rollback(); toast('Network error'); });
+    return;
+  } else if (sideUsed === 'both') {
+    // Save log and close modal as usual
+    const payload = {
+      timestamp: new Date().toISOString(),
+      date: today(),
+      user_id: state.userId || 'u_camp',
+      exercise_id: curEx.id,
+      side: sideUsed,
+      sets_done: Number(stepVals.sets_done),
+      planned_reps: Number(stepVals.planned_reps),
+      weight_lb: Number(stepVals.weight_lb),
+      height: Number(stepVals.height||0),
+      rpe_set2: Number(stepVals.rpe_set2),
+      fail_reps: Number(stepVals.fail_reps),
+      skip_progress: skip ? 1 : '',
+      notes: $('#logNotes').value||''
+    };
+    try { if(modalEl) modalEl.close(); } catch(_){}
+    apiPost('addLog', payload)
+      .then(res => {
+        if(res && !res.error){
+          fetchAll();
+        }else{
+          rollback(); toast('Error saving log');
+        }
+      })
+      .catch(()=>{ rollback(); toast('Network error'); });
+    return;
+  }
 }
 
 
 // ===== v15 — Summary polish, consistency bar, stronger progression, suggestions =====
+
+async function refreshFromBackend(){
+  try {
+    await fetchAll();
+  } catch (e) {
+    console.error('Refresh failed', e);
+  }
+}
+
+
 function _isoDate(val){
-  if (typeof val==='string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val; // already YYYY-MM-DD
   const d = new Date(val);
-  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`; // local date, no off-by-one
 }
 function _mondayOf(d){ const x=new Date(d); x.setDate(d.getDate()-((d.getDay()+6)%7)); x.setHours(0,0,0,0); return x; }
 function _addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 
+function _startOfWeekLocal(d, weekStart){
+  const date = new Date(d);
+  date.setHours(0,0,0,0);
+  const dow = date.getDay(); // 0=Sun ... 6=Sat (local)
+  const ws  = Number.isFinite(weekStart) ? weekStart : 1; // default Monday
+  // shift so that result is local midnight of the configured start day
+  let diff = dow - (ws % 7);
+  if (diff < 0) diff += 7;
+  date.setDate(date.getDate() - diff);
+  return date;
+}
+
+function _dateOnlyLocal(val){
+  // Prefer YYYY-MM-DD as-is; otherwise build local date string
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  const d = new Date(val);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 function daysThisWeekFlags(){
-  const logs = logsForUser();
-  const mon = _mondayOf(new Date());
-  const end = _addDays(mon,6);
-  const days = new Set();
-  for(const l of logs){
-    const ds = _isoDate(l.date||l.timestamp);
-    const dt = new Date(ds+'T12:00:00');
-    if(dt>=mon && dt<=end) days.add(ds);
+  const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 1; // 1=Mon
+  const start = _startOfWeekLocal(new Date(), ws);           // local midnight at week start
+  const end   = new Date(start); end.setDate(start.getDate()+7); // half-open [start, end)
+
+  // Collect unique local YYYY-MM-DD inside this week window
+  const daySet = new Set();
+  for(const l of logsForUser()){
+    const key = _dateOnlyLocal(l.date || l.timestamp);
+    const dt  = new Date(key+'T12:00:00'); // local noon avoids DST edge cases
+    if (dt >= start && dt < end) daySet.add(key);
   }
+
+  // Build flags in order from week start + i
   const flags = [];
-  for(let i=0;i<7;i++){ const ds=_isoDate(_addDays(mon,i)); flags.push(days.has(ds)); }
-  return { count: days.size, flags };
+  for(let i=0;i<7;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const key = _dateOnlyLocal(d);
+    flags.push(daySet.has(key));
+  }
+  const count = flags.reduce((a,b)=>a + (b?1:0), 0);
+  return { count, flags };
 }
 
 function computeNextFromPerformance(last, ex){
-  const min=CONFIG.REP_MIN, max=CONFIG.REP_MAX;
-  let reps = Number(last.planned_reps||8);
-  let wt   = Number(last.weight_lb||ex?.default_weight||0);
-  const fail = Number(last.fail_reps || reps);
-  const rpe  = Number(last.rpe_set2 || 8);
-  if (fail - reps >= 3) reps += 3;
-  else if (fail - reps >= 2) reps += 2;
-  else if (fail - reps >= 1) reps += 1;
-  else if (fail <= reps - 2 || rpe >= 9) reps -= 1;
-  reps = Math.max(min, Math.min(max, reps));
-  if (reps === max){
-    if (fail >= 14 || rpe <= 6) { wt += 10; reps = 8; }
-    else if (fail >= 13 || rpe <= 7) { wt += 5; reps = 8; }
+  const min = CONFIG.REP_MIN, max = CONFIG.REP_MAX;
+  let reps = Number(last.planned_reps || min);
+  let wt   = Number(last.weight_lb || ex?.default_weight || 0);
+
+  const frRaw = Number(last.fail_reps);
+  const hasToFailure = Number.isFinite(frRaw) && frRaw >= reps;
+  const actualMaxReps = hasToFailure ? frRaw : reps;
+  const failedAttempts = !hasToFailure && Number.isFinite(frRaw) ? Math.max(0, frRaw) : 0;
+  const rpe = Number(last.rpe_set2 || 8);
+
+  const overRatio = reps > 0 ? (actualMaxReps / reps) : 1;
+  const lowRPE = rpe <= 8;
+  const veryHighRPE = rpe >= CONFIG.RPE_VERY_HIGH;
+
+  // 1) Deload if needed
+  if (failedAttempts > 0 || veryHighRPE || reps < min) {
+    wt = Math.max(0, wt - CONFIG.DEFAULT_INC_LB);
+    reps = min;
+    return { weight: wt, reps };
   }
-  if (reps === min && (fail < min || rpe >= 9)){ wt = Math.max(0, wt - CONFIG.DEFAULT_INC_LB); }
+
+  // 2) Big jump: ≥2× planned reps
+  if (overRatio >= CONFIG.OVERPERF_RATIO_2X) {
+    wt += CONFIG.DEFAULT_INC_LB * CONFIG.OVERPERF_BIG_INC_STEPS;
+    reps = min;
+    return { weight: wt, reps };
+  }
+
+  // 3) Medium jump: ≥1.5× planned reps
+  if (overRatio >= CONFIG.OVERPERF_RATIO_1P5X) {
+    wt += CONFIG.DEFAULT_INC_LB * CONFIG.OVERPERF_MED_INC_STEPS;
+    reps = min;
+    return { weight: wt, reps };
+  }
+
+  // 4) Top of range & easy → add weight
+  if (reps >= max && lowRPE) {
+    wt += CONFIG.DEFAULT_INC_LB;
+    reps = min;
+    return { weight: wt, reps };
+  }
+
+  // 5) Increase reps within range
+  if (reps < max && rpe <= CONFIG.RPE_OK_FOR_REP_UP && failedAttempts === 0) {
+    reps = Math.min(max, reps + 1);
+    return { weight: wt, reps };
+  }
+
+  // 6) Hold
   return { weight: wt, reps };
 }
-(function(){
-  if (typeof suggestNext === 'function'){
-    const _base = suggestNext;
-    suggestNext = function(exId, side){
-      const base = _base(exId, side) || {};
-      try{
-        const last = latestFor(exId, side);
-        if (last){
-          const ex = state.byId[exId];
-          const adv = computeNextFromPerformance(last, ex);
-          base.weight = adv.weight;
-          base.reps   = adv.reps;
-        }
-      }catch(_){}
-      return base;
-    };
-  }
-})();
+
 
 function _musclesOf(e){ return [e.primary,e.secondary,e.tertiary].filter(Boolean); }
 function suggestWorkoutsV15(count=5){
