@@ -677,28 +677,40 @@ function arrangeLogLayout(){
     b.style.setProperty('display','flex','important');
     b.style.setProperty('align-items','center','important');
     b.style.setProperty('justify-content','center','important');
-    b.style.setProperty('font-size','18px','important');
+    b.style.setProperty('font-size','16px','important');
     b.style.setProperty('line-height','1','important');
     b.style.setProperty('padding','0','important');
-    b.style.setProperty('min-width','34px','important');
-    b.style.setProperty('height','34px','important');
+    b.style.setProperty('min-width','40px','important');
+    b.style.setProperty('height','40px','important');
+  });
+
+  // Stabilize the numeric value box size
+  stack.querySelectorAll('.stepper .ctr span').forEach(s=>{
+    s.style.setProperty('display','flex','important');
+    s.style.setProperty('align-items','center','important');
+    s.style.setProperty('justify-content','center','important');
+    s.style.setProperty('height','40px','important');
+    s.style.setProperty('min-width','68px','important');
+    s.style.setProperty('line-height','1','important');
+    s.style.setProperty('font-size','22px','important');
+    s.style.setProperty('font-variant-numeric','tabular-nums','important');
   });
 
   // Create rows (spacing only via class, not inline style)
   const row = (cols)=>{
-    const d=document.createElement('div');
-    d.className='row';
+    const d = document.createElement('div');
+    d.className = 'row';
     d.style.setProperty('display','grid','important');
-    d.style.setProperty('grid-template-columns',`repeat(${cols}, 1fr)`,'important');
-    d.style.removeProperty('gap');
+    d.style.setProperty('grid-template-columns', `repeat(${cols}, 1fr)`, 'important');
+    d.style.setProperty('width','100%','important');
     d.style.setProperty('margin','0','important');
-    d.style.removeProperty('padding');
     return d;
   };
   const row2a = row(2); // Set + Rep
   const row2b = row(2); // Weight + Height
   const row1  = row(1); // RPE
   const row1b = row(1); // Fail reps
+  [row2a,row2b,row1,row1b].forEach(r=> r.style.setProperty('width','100%','important'));
 
   // Move steppers into new layout
   const setStep   = getStep('sets_done');
@@ -707,6 +719,9 @@ function arrangeLogLayout(){
   const hStep     = getStep('height');
   const rpeStep   = getStep('rpe_set2');
   const failStep  = getStep('fail_reps');
+  [setStep,repsStep,wtStep,hStep,rpeStep,failStep].filter(Boolean).forEach(n=>{
+    n.style.setProperty('width','100%','important');
+  });
 
   if(setStep && repsStep){ row2a.appendChild(setStep); row2a.appendChild(repsStep); }
   if(wtStep && hStep){     row2b.appendChild(wtStep);  row2b.appendChild(hStep); }
