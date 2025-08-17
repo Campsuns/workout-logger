@@ -584,6 +584,8 @@ function arrangeLogLayout(){
   if (formWrap){
     // Reduce top padding so the whole header sits higher
     formWrap.style.setProperty('padding-top','12px','important'); // was 24px in CSS
+    // Ensure the form spans the modal width
+    formWrap.style.setProperty('width','100%','important');
   }
   const title = $('#logTitle');
   const sub   = $('#logSub');
@@ -663,6 +665,14 @@ function arrangeLogLayout(){
   if(!stack) return;
   stack.style.setProperty('gap', refGapPx + 'px', 'important');
   stack.style.setProperty('margin','0','important');
+  // Ensure stack fills width and its children aren't capped
+  stack.style.setProperty('width','100%','important');
+  // Ensure steppers, seg group, and textareas take the full grid cell width
+  stack.querySelectorAll('.stepper, .seg, textarea, select, input').forEach(el=>{
+    el.style.setProperty('width','100%','important');
+    el.style.setProperty('max-width','none','important');
+    el.style.setProperty('box-sizing','border-box','important');
+  });
   // Clear any lingering pulse classes from previous interactions
   stack.querySelectorAll('.stepper').forEach(n => n.classList.remove('pulse-up','pulse-down'));
 
@@ -710,7 +720,10 @@ function arrangeLogLayout(){
   const row2b = row(2); // Weight + Height
   const row1  = row(1); // RPE
   const row1b = row(1); // Fail reps
-  [row2a,row2b,row1,row1b].forEach(r=> r.style.setProperty('width','100%','important'));
+  [row2a,row2b,row1,row1b].forEach(r=>{
+    r.style.setProperty('width','100%','important');
+    r.style.removeProperty('max-width');
+  });
 
   // Move steppers into new layout
   const setStep   = getStep('sets_done');
@@ -721,6 +734,11 @@ function arrangeLogLayout(){
   const failStep  = getStep('fail_reps');
   [setStep,repsStep,wtStep,hStep,rpeStep,failStep].filter(Boolean).forEach(n=>{
     n.style.setProperty('width','100%','important');
+  });
+  // Ensure each stepper's .ctr track can expand
+  [setStep,repsStep,wtStep,hStep,rpeStep,failStep].filter(Boolean).forEach(n=>{
+    const ctr = n.querySelector('.ctr');
+    if(ctr){ ctr.style.setProperty('width','100%','important'); ctr.style.removeProperty('max-width'); }
   });
 
   if(setStep && repsStep){ row2a.appendChild(setStep); row2a.appendChild(repsStep); }

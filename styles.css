@@ -460,6 +460,14 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 #logModal menu{ margin:12px 0 0 !important; }
 #logModal #logSub{ margin:2px 0 12px !important; }
 
+/* Ensure log modal rows and their controls span full width */
+#logModal .stack .row{ width:100%; }
+#logModal .stack .row > .stepper,
+#logModal .stack .row > .seg,
+#logModal .stack .row > textarea,
+#logModal .stack .row > select,
+#logModal .stack .row > input{ width:100%; }
+
 /* Adjust only vertical rhythm in log modal */
 #logModal .log-row + .log-row {
   margin-top: 12px;
