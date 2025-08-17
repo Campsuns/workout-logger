@@ -689,6 +689,11 @@ function arrangeLogLayout(){
   const row = (cols)=>{
     const d = document.createElement('div');
     d.className = 'row';
+    // Explicit grid so every row fills the modal width and 2-up rows behave consistently
+    d.style.setProperty('display','grid','important');
+    d.style.setProperty('grid-template-columns', cols===2 ? '1fr 1fr' : '1fr', 'important');
+    d.style.setProperty('column-gap','12px','important');
+    d.style.setProperty('align-items','stretch','important');
     d.style.setProperty('width','100%','important');
     d.style.setProperty('margin','0','important');
     return d;
