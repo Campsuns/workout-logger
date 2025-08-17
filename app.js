@@ -682,36 +682,13 @@ function arrangeLogLayout(){
   // Make arrow buttons ▲ ▼ instead of +/-
   stack.querySelectorAll('.stepper .up').forEach(b=>{ b.textContent='▲'; b.setAttribute('aria-label','Increase'); });
   stack.querySelectorAll('.stepper .down').forEach(b=>{ b.textContent='▼'; b.setAttribute('aria-label','Decrease'); });
-  // Style normalization for arrow buttons (up/down)
-  stack.querySelectorAll('.stepper .up, .stepper .down').forEach(b=>{
-    b.style.setProperty('display','flex','important');
-    b.style.setProperty('align-items','center','important');
-    b.style.setProperty('justify-content','center','important');
-    b.style.setProperty('font-size','16px','important');
-    b.style.setProperty('line-height','1','important');
-    b.style.setProperty('padding','0','important');
-    b.style.setProperty('min-width','40px','important');
-    b.style.setProperty('height','40px','important');
-  });
 
-  // Stabilize the numeric value box size
-  stack.querySelectorAll('.stepper .ctr span').forEach(s=>{
-    s.style.setProperty('display','flex','important');
-    s.style.setProperty('align-items','center','important');
-    s.style.setProperty('justify-content','center','important');
-    s.style.setProperty('height','40px','important');
-    s.style.setProperty('min-width','68px','important');
-    s.style.setProperty('line-height','1','important');
-    s.style.setProperty('font-size','22px','important');
-    s.style.setProperty('font-variant-numeric','tabular-nums','important');
-  });
+  // (Removed inline numeric value box sizing; CSS should control)
 
   // Create rows (spacing only via class, not inline style)
   const row = (cols)=>{
     const d = document.createElement('div');
     d.className = 'row';
-    d.style.setProperty('display','grid','important');
-    d.style.setProperty('grid-template-columns', `repeat(${cols}, 1fr)`, 'important');
     d.style.setProperty('width','100%','important');
     d.style.setProperty('margin','0','important');
     return d;

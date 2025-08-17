@@ -460,8 +460,16 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 #logModal menu{ margin:12px 0 0 !important; }
 #logModal #logSub{ margin:2px 0 12px !important; }
 
+/* Grid templates per row, based on actual children */
+#logModal .stack .row{ display:grid; grid-template-columns: 1fr; width:100%; }
+/* If a row has two steppers (e.g., Sets/Reps or Weight/Height), make it 2-up */
+#logModal .stack .row:has(> .stepper + .stepper){ grid-template-columns: 1fr 1fr; }
+/* Rows with a textarea (Notes) stay single column full-width */
+#logModal .stack .row:has(> textarea){ grid-template-columns: 1fr; }
+/* Rows with a single stepper (RPE, Fail reps) stay single column full-width */
+#logModal .stack .row:has(> .stepper):not(:has(> .stepper + .stepper)){ grid-template-columns: 1fr; }
+
 /* Ensure log modal rows and their controls span full width */
-#logModal .stack .row{ width:100%; }
 #logModal .stack .row > .stepper,
 #logModal .stack .row > .seg,
 #logModal .stack .row > textarea,
