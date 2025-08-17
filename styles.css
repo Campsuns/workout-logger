@@ -450,6 +450,31 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 }
 
 
+/* === Log modal: make each row and control fill width, and align steppers === */
+#logModal .stack .row{ width:100% !important; }
+#logModal .stack .row > .stepper,
+#logModal .stack .row > .seg,
+#logModal .stack .row > textarea{ width:100% !important; }
+
+/* Center ▲ value ▼ precisely in a 40px track (scoped to the log modal only) */
+#logModal .stepper .ctr{
+  display:grid !important;
+  grid-template-columns: 40px minmax(68px,1fr) 40px;
+  align-items:center;
+  gap:12px;
+  height:40px;
+}
+#logModal .stepper .ctr button{
+  display:flex; align-items:center; justify-content:center;
+  width:40px; height:40px; padding:0; line-height:1; font-size:16px;
+}
+#logModal .stepper .ctr span{
+  display:flex; align-items:center; justify-content:center;
+  height:40px; min-width:68px; line-height:1; font-size:22px; font-weight:800;
+  font-variant-numeric: tabular-nums;
+}
+
+
 
 
 /* === Log modal: sliding filled highlight for Left / Both / Right === */
