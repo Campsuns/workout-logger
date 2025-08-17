@@ -525,3 +525,14 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 #page-summary .period-tabs.year  button[data-period="year"]{
   color:#0b0b0c; font-weight:800;
 }
+
+/* --- Responsive: make top rows span full width on mobile --- */
+@media (max-width: 768px){
+  /* Let the dialog breathe to the viewport edges */
+  #logModal{ max-width:100vw; }
+  #logModal .logform{ padding-left:12px; padding-right:12px; }
+
+  /* Two-up rows (Sets/Reps and Weight/Height) fill the width */
+  #logModal .row{ grid-template-columns: repeat(2, minmax(0,1fr)); column-gap:12px; }
+  #logModal .row > .stepper{ min-width:0; }
+}
