@@ -540,20 +540,27 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 
 /* === Log modal: precise alignment for stepper arrows and value === */
 #logModal .stepper .ctr{
-  /* switch to a 3-column grid: [▲][value][▼] */
+  /* 3-column grid: [▲][value][▼] */
   display: grid !important;
   grid-template-columns: 40px minmax(72px,1fr) 40px;
+  grid-auto-rows: 40px;        /* every cell is 40px tall */
+  height: 40px;                /* lock track height */
   align-items: center;
   gap: 12px;
-  justify-content: initial; /* cancel space-between from base */
+  justify-content: initial;    /* cancel space-between from base */
+  margin-top: 6px;             /* keep original outer spacing */
 }
 #logModal .stepper .ctr button{
   width: 40px; height: 40px;
   display:flex; align-items:center; justify-content:center;
-  line-height: 1; /* center the ▲/▼ glyphs */
+  padding: 0;                  /* no inner padding wobble */
+  box-sizing: border-box;      /* include border in the 40px box */
+  line-height: 1;              /* center the ▲/▼ glyphs */
 }
 #logModal .stepper .ctr span{
   display:flex; align-items:center; justify-content:center;
-  height:40px; min-width:72px; line-height:1;
+  height:40px; min-width:72px;
+  line-height:1; letter-spacing:0; /* avoid baseline/kerning drift */
+  font-size:24px; font-weight:800; /* keep intended weight/size */
   font-variant-numeric: tabular-nums; /* avoid width jitter when value changes */
 }
