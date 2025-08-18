@@ -1,3 +1,4 @@
+console.log("✅ JS file loaded and running");
 // ==== CONFIG – paste your Apps Script Web App URL + token ====
 // IMPORTANT: after unzipping, copy your existing API_URL and TOKEN
 // values from your current app.js into CONFIG below.
@@ -570,6 +571,7 @@ function openLog(exId){
 
 // Re-arrange the log modal UI (rows & buttons) and tweak styles
 function arrangeLogLayout(){
+  console.log("👉 arrangeLogLayout triggered");
   const modal = $('#logModal');
   if(!modal) return;
   const VSPACE = '12px'; // single source of truth for vertical spacing
@@ -582,9 +584,10 @@ function arrangeLogLayout(){
   // Header: move title+subtitle up together and keep a small gap between them
   const formWrap = modal.querySelector('.logform');
   if (formWrap){
-    // Reduce top padding so the whole header sits higher
-    formWrap.style.setProperty('padding-top','12px','important'); // was 24px in CSS
-    // Ensure the form spans the modal width
+    // Reduce top padding so the whole header sits higher, and shrink horizontal padding on mobile
+    formWrap.style.setProperty('padding-top','12px','important');
+    formWrap.style.setProperty('padding-left','8px','important');
+    formWrap.style.setProperty('padding-right','8px','important');
     formWrap.style.setProperty('width','100%','important');
   }
   const title = $('#logTitle');
@@ -691,8 +694,8 @@ function arrangeLogLayout(){
     d.className = 'row';
     // Explicit grid so every row fills the modal width and 2-up rows behave consistently
     d.style.setProperty('display','grid','important');
-    d.style.setProperty('grid-template-columns', cols===2 ? '1fr 1fr' : '1fr', 'important');
-    d.style.setProperty('column-gap','12px','important');
+    d.style.setProperty('grid-template-columns', cols===2 ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)', 'important');
+    d.style.setProperty('column-gap','8px','important');
     d.style.setProperty('align-items','stretch','important');
     d.style.setProperty('width','100%','important');
     d.style.setProperty('margin','0','important');
@@ -721,6 +724,106 @@ function arrangeLogLayout(){
   [setStep,repsStep,wtStep,hStep,rpeStep,failStep].filter(Boolean).forEach(n=>{
     const ctr = n.querySelector('.ctr');
     if(ctr){ ctr.style.setProperty('width','100%','important'); ctr.style.removeProperty('max-width'); }
+  });
+  // Normalize the internal layout of the counter track so ▲ [value] ▲ are perfectly aligned
+  ;[setStep,repsStep,wtStep,hStep,rpeStep,failStep].filter(Boolean).forEach(n=>{
+    const ctr = n.querySelector('.ctr');
+    if(ctr){
+      ctr.style.setProperty('display','grid','important');
+      // PATCH: Drastic compact settings for visual confirmation
+      const modalW = (document.getElementById('logModal')?.getBoundingClientRect().width) || 520;
+      const compact = modalW <= 420; // widen trigger so it hits most phones
+      const btnSize = compact ? 30 : 40;            // drastic shrink on mobile
+      const gap = compact ? 2 : 10;                 // minimal spacing on mobile
+      ctr.style.setProperty('grid-template-columns', btnSize+"px 1fr "+btnSize+"px", 'important');
+      ctr.style.setProperty('align-items','center','important');
+      ctr.style.setProperty('gap', String(gap)+'px','important');
+      ctr.style.setProperty('justify-items','center','important');
+      // Ensure track itself has consistent height
+      ctr.style.setProperty('min-height', btnSize+'px', 'important');
+      ctr.style.setProperty('height', btnSize+'px', 'important');
+      // PATCH: Add drastic constraints for compact mode
+      if (compact) {
+        ctr.style.setProperty('padding','0','important');
+        ctr.style.setProperty('border-width','1px','important');
+        ctr.style.setProperty('box-shadow','none','important');
+      }
+      const val = ctr.querySelector('span');
+      if(val){
+        val.style.setProperty('justify-self','center','important');
+        val.style.setProperty('text-align','center','important');
+        // Strong centering for varying font metrics
+        val.style.setProperty('display','flex','important');
+        val.style.setProperty('align-items','center','important');
+        val.style.setProperty('justify-content','center','important');
+        val.style.setProperty('height', btnSize+'px', 'important');
+        val.style.setProperty('line-height', btnSize+'px', 'important');
+        val.style.setProperty('font-variant-numeric','tabular-nums','important');
+        // PATCH: More aggressive compact font size and fixed line-height
+        if(compact){
+          val.style.setProperty('font-size','16px','important');
+          val.style.setProperty('line-height', btnSize+'px', 'important');
+        }
+        val.style.setProperty('padding','0','important');
+        // Remove any previous transforms so we don't fight CSS
+        val.style.removeProperty('transform');
+      }
+      const btns = ctr.querySelectorAll('button');
+      btns.forEach(b=>{
+        // PATCH: Use the same compact threshold and btnSize as above
+        const modalW = (document.getElementById('logModal')?.getBoundingClientRect().width) || 520;
+        const compact = modalW <= 420;
+        const btnSize = compact ? 30 : 40;
+        b.style.setProperty('width', btnSize+'px','important');
+        b.style.setProperty('height', btnSize+'px','important');
+        b.style.setProperty('display','flex','important');
+        b.style.setProperty('align-items','center','important');
+        b.style.setProperty('justify-content','center','important');
+        b.style.setProperty('line-height','1','important');
+        b.style.setProperty('padding','0','important');
+        // PATCH: More aggressive compact font size
+        b.style.setProperty('font-size', (compact ? '16px' : '20px'), 'important');
+        // PATCH: Force glyphs to sit inside smaller boxes
+        if (compact) {
+          b.style.setProperty('line-height', btnSize+'px','important');
+          b.style.setProperty('min-width', btnSize+'px','important');
+          b.style.setProperty('min-height', btnSize+'px','important');
+        }
+        b.style.removeProperty('transform');
+      });
+      // --- Measurement-based vertical centering (final pass) ---
+      // We measure the parent and children and apply a tiny, sub-pixel translateY to align optical centers.
+      requestAnimationFrame(()=>{
+        try{
+          if (compact) return; // on narrow screens we rely on tighter spacing instead of transforms
+          // Prefer the ctr's own geometric center; if a label exists, keep it as a soft reference
+          const parent = ctr.getBoundingClientRect();
+          let targetY = parent.top + parent.height/2;
+          const label = ctr.closest('.stepper')?.querySelector('label');
+          if(label){
+            // If label exists and ctr is immediately after it, keep center within ctr (not label),
+            // but use label read to avoid layout jitter on Safari (no-op if not needed)
+            void label.offsetWidth; // force layout
+          }
+
+          const adjust = (el)=>{
+            if(!el) return;
+            const r = el.getBoundingClientRect();
+            const cy = r.top + r.height/2;
+            const dy = targetY - cy; // signed offset
+            // Apply sub-pixel translate only if meaningful (avoids accumulating blur)
+            if(Math.abs(dy) > 0.05){
+              const cur = getComputedStyle(el).transform;
+              const t = `translate3d(0, ${dy.toFixed(3)}px, 0)`;
+              el.style.transform = (cur && cur !== 'none') ? `${cur} ${t}` : t;
+              el.style.willChange = 'transform';
+            }
+          };
+          adjust(ctr.querySelector('span'));
+          btns.forEach(b=>adjust(b));
+        }catch(_){/* ignore */}
+      });
+    }
   });
 
   if(setStep && repsStep){ row2a.appendChild(setStep); row2a.appendChild(repsStep); }

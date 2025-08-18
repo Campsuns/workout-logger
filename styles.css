@@ -20,6 +20,10 @@
   --done-bd:#21443f;      /* card border for done */
   --done-pill:#1f5d55;    /* reps/sets pill border for done */
   --done-text:#b6fff2;    /* reps/sets pill text for done */
+
+  --stepper-btn: 40px;      /* base square size for ▲/▼ and track height */
+  --stepper-gap: 12px;      /* space between arrow–value–arrow */
+  --stepper-val-min: 68px;  /* minimum width reserved for the value */
 }
 body.annie{
   --accent:#c9a7ff;  --accent-r:201; --accent-g:167; --accent-b:255;
@@ -180,20 +184,20 @@ dialog::backdrop{ background:rgba(0,0,0,.6); backdrop-filter: blur(4px); }
 .stepper .ctr{
   margin-top:6px;
   display:grid;
-  grid-template-columns: 40px minmax(68px,1fr) 40px;
-  align-items:center;
-  gap:12px;
-  height:40px;
+  grid-template-columns: var(--stepper-btn) minmax(var(--stepper-val-min), 1fr) var(--stepper-btn);
+  align-items: center;
+  gap: var(--stepper-gap);
+  height: var(--stepper-btn);
 }
 .stepper .ctr button{
-  width:40px; height:40px; border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff;
+  width: var(--stepper-btn); height: var(--stepper-btn); border-radius:12px; background:#15161b; border:1px solid #23242b; color:#fff;
   display:flex; align-items:center; justify-content:center;
   padding:0; line-height:1; font-size:16px;
 }
 .stepper .ctr span{
   display:flex; align-items:center; justify-content:center;
-  height:40px; min-width:68px; text-align:center;
-  font-size:22px; font-weight:800; line-height:1; letter-spacing:0;
+  height: var(--stepper-btn); min-width: var(--stepper-val-min); text-align:center;
+  font-size:22px; font-weight:800; line-height: var(--stepper-btn); letter-spacing:0;
   font-variant-numeric: tabular-nums;
 }
 .seg{ display:flex; align-items:center; justify-content:space-between; background:#0f1015; border:1px solid #1f2028; border-radius:16px; padding:12px; }
@@ -558,4 +562,18 @@ body[data-page="summary"] #summaryContent{ padding-top: 14px; }
 #page-summary .period-tabs.month button[data-period="month"],
 #page-summary .period-tabs.year  button[data-period="year"]{
   color:#0b0b0c; font-weight:800;
+}
+
+
+
+
+/* Compact stepper sizing on small screens — variable-only override */
+@media (max-width: 420px){
+  #logModal{
+    --stepper-btn: 30px;      /* keep square size for touch */
+    --stepper-gap: 2px;       /* shrink gap a bit further */
+    --stepper-val-min: 50px;  /* slightly narrower value well */
+  }
+  #logModal .stepper .ctr span{ font-size:16px; }
+  #logModal .stepper .ctr button{ font-size:16px; }
 }
