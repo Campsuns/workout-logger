@@ -44,6 +44,118 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
 const $  = (q, root=document)=>root.querySelector(q);
 const $$ = (q, root=document)=>Array.from(root.querySelectorAll(q));
 
+// ---- Tiny loading state + dot bounce animation ----
+function ensureLoadingStyles(){
+  let s = document.getElementById('dot-bounce-style');
+  const css = `
+    @keyframes dotBounce{0%{transform:translateY(0);opacity:.7}50%{transform:translateY(-4px);opacity:1}100%{transform:translateY(0);opacity:.7}}
+    .consistency.loading .dot{ animation: dotBounce 700ms ease-in-out infinite; }
+
+    /* Mini header loader (kept) */
+    #miniLoad{ display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+    #miniLoad .d{ width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.18); }
+    #miniLoad.loading .d{ animation: dotBounce 700ms ease-in-out infinite; }
+
+    /* Full-screen wipe overlay while switching profiles */
+    #switchOverlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; background: var(--accent); will-change: transform, opacity; }
+    #switchOverlay .wipe{ display:flex; gap:12px; }
+    #switchOverlay .dot{ width:14px; height:14px; border-radius:50%; border:2px solid #fff; background:transparent; box-shadow:0 0 0 0 rgba(0,0,0,0.12); }
+    #switchOverlay .dot.on{ background:#fff; }
+    #switchOverlay.loading .dot{ animation: dotBounce 700ms ease-in-out infinite; }
+
+    /* Slide directions */
+    /* Right-directed (enter from right, exit to left) */
+    .dir-right.enter  { animation: wipeInRight 420ms cubic-bezier(.22,.61,.36,1) forwards; }
+    .dir-right.exit   { animation: wipeOutLeft 360ms cubic-bezier(.4,0,.2,1) forwards; }
+    /* Left-directed (enter from left, exit to right) */
+    .dir-left.enter   { animation: wipeInLeft 420ms cubic-bezier(.22,.61,.36,1) forwards; }
+    .dir-left.exit    { animation: wipeOutRight 360ms cubic-bezier(.4,0,.2,1) forwards; }
+
+    @keyframes wipeInRight { from { transform: translateX(100%); } to { transform: translateX(0%); } }
+    @keyframes wipeOutLeft { from { transform: translateX(0%); }   to { transform: translateX(-100%); } }
+    @keyframes wipeInLeft  { from { transform: translateX(-100%); } to { transform: translateX(0%); } }
+    @keyframes wipeOutRight{ from { transform: translateX(0%); }   to { transform: translateX(100%); } }
+  `;
+  if (!s) {
+    s = document.createElement('style');
+    s.id = 'dot-bounce-style';
+    document.head.appendChild(s);
+  }
+  s.textContent = css;
+}
+function setLoading(on){
+  state.loading = !!on;
+  document.body.classList.toggle('is-loading', !!on);
+  ensureLoadingStyles();
+
+  // Keep the tiny header dots as a secondary cue
+  const top = document.querySelector('.topbar');
+  if (top) {
+    let mini = document.getElementById('miniLoad');
+    if (!mini) {
+      mini = document.createElement('div');
+      mini.id = 'miniLoad';
+      top.appendChild(mini);
+      for (let i=0;i<7;i++){
+        const d=document.createElement('div'); d.className='d'; d.style.animationDelay=(i*70)+'ms'; mini.appendChild(d);
+      }
+    }
+    mini.classList.toggle('loading', !!on);
+    mini.style.visibility = on ? 'visible' : 'hidden';
+  }
+
+  // Ensure overlay exists
+  let ov = document.getElementById('switchOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'switchOverlay';
+    const wrap = document.createElement('div');
+    wrap.className = 'wipe';
+    for (let i=0;i<7;i++){
+      const d = document.createElement('div'); d.className = 'dot'; d.style.animationDelay = (i*80)+'ms'; wrap.appendChild(d);
+    }
+    ov.appendChild(wrap);
+    document.body.appendChild(ov);
+  }
+
+  // Direction based on the target user
+  const dirClass = (state.userId === 'u_annie') ? 'dir-left' : 'dir-right';
+  ov.classList.remove('dir-left','dir-right');
+  ov.classList.add(dirClass);
+
+  // Sync dot fill if we have week flags
+  try {
+    const wf = daysThisWeekFlags();
+    ov.querySelectorAll('.dot').forEach((d,i)=> d.classList.toggle('on', !!wf.flags[i]));
+  } catch(_){}
+
+  // Play animations
+  if (on) {
+    ov.style.display = 'flex';
+    ov.classList.add('loading'); // enable dot bounce during load
+    // reset exit state if lingering
+    ov.classList.remove('exit');
+    // trigger enter
+    void ov.offsetWidth; // reflow
+    ov.classList.add('enter');
+  } else {
+    // stop dot bounce and play exit animation, then hide
+    ov.classList.remove('loading');
+    ov.classList.remove('enter');
+    void ov.offsetWidth; // reflow
+    ov.classList.add('exit');
+    const done = ()=>{
+      ov.removeEventListener('animationend', done);
+      ov.style.display = 'none';
+      ov.classList.remove('exit');
+    };
+    ov.addEventListener('animationend', done);
+  }
+
+  // Re-render summary so the big dots animate there too
+  try { renderSummary(); } catch(_){}
+}
+
 // Prevent double-tap zoom inside the log modal (keeps pinch-zoom elsewhere)
 (function(){
   let last=0;
@@ -353,7 +465,9 @@ function renderUserChips(){
       btn.classList.add('active');
 
       // Pull fresh data (so manual sheet edits are reflected)
+      setLoading(true);
       await refreshFromBackend();
+      setLoading(false);
 
       // After refresh, rebuild byId using the shared library
       state.byId = Object.fromEntries(exercisesForUser().map(e=>[e.id, e]));
@@ -1814,6 +1928,16 @@ renderSummary = function(){
       <div class="meta">Computing…</div>
     </section>
   `;
+
+  // If we're in a loading state, animate the week dots with a subtle stagger
+  if (state.loading) {
+    const row = document.querySelector('#streakCard .consistency');
+    if (row) {
+      row.classList.add('loading');
+      const dots = row.querySelectorAll('.dot');
+      dots.forEach((d,i)=>{ d.style.animationDelay = (i*70)+'ms'; });
+    }
+  }
 
   // Color the minimap if an existing painter exists; otherwise noop
   if (typeof paintMiniMap==='function') {
