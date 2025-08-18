@@ -842,49 +842,58 @@ function arrangeLogLayout(){
   // Ensure a clear gap after the last row before Notes
   row1b.style.setProperty('margin-bottom', refGapPx + 'px', 'important');
 
-  // Ensure spacing above Notes matches the reference gap using a resilient spacer (no margin-collapsing)
+  // Align actions row in-place and position Notes directly after it (no re-parenting)
+  const btnSkip   = document.getElementById('btnSkip');
+  const btnCancel = document.getElementById('btnCancel');
+  const btnLog    = document.getElementById('btnLog');
+
+  // Actions menu is the parent of any of these buttons
+  const actions = (btnSkip || btnCancel || btnLog) ? (btnSkip?.parentElement || btnCancel?.parentElement || btnLog?.parentElement) : null;
+
+  // Notes block wrapper (prefer field wrapper)
   const notesEl = document.getElementById('logNotes');
+  let notesBlock = null;
   if (notesEl) {
-    const notesWrap2 = notesEl.closest('.field') || notesEl.parentElement;
-    if (notesWrap2 && notesWrap2.parentElement) {
-      // Remove any previous margin to avoid doubling
-      try { notesWrap2.style.removeProperty('margin-top'); } catch(_) {}
-      const prev = notesWrap2.previousElementSibling;
-      if (!(prev && prev.classList && prev.classList.contains('gap-spacer'))) {
-        const sp = document.createElement('div');
-        sp.className = 'gap-spacer';
-        sp.style.height = refGapPx + 'px';
-        sp.style.width = '100%';
-        sp.style.pointerEvents = 'none';
-        sp.style.display = 'block';
-        notesWrap2.parentElement.insertBefore(sp, notesWrap2);
-      } else {
-        prev.style.height = refGapPx + 'px';
-      }
-    }
+    notesBlock = notesEl.closest('.field') || notesEl;
   }
 
-  // Align actions: Skip left; Cancel + Log on the right, with Log at far right
-  const btnSkip   = $('#btnSkip');
-  const btnCancel = $('#btnCancel');
-  const btnLog    = $('#btnLog');
-  const actions   = (btnSkip || btnCancel || btnLog) ? (btnSkip?.parentElement || btnCancel?.parentElement || btnLog?.parentElement) : null;
-  if(actions){
-    actions.style.display='flex';
-    actions.style.alignItems='center';
-    actions.style.gap='8px';
-    // Ensure Skip is first in DOM
-    if(btnSkip) actions.prepend(btnSkip);
-    // Build a right box for cancel+log
-    const rightBox = document.createElement('div');
-    rightBox.style.display='inline-flex';
-    rightBox.style.gap='8px';
-    rightBox.style.marginLeft='auto';
-    if(btnCancel) rightBox.appendChild(btnCancel);
-    if(btnLog)    rightBox.appendChild(btnLog); // log on the far right
-    actions.appendChild(rightBox);
-    // Ensure the actions bar sits the same distance from the Notes block
+  if (actions) {
+    // --- Normalize the actions row content (keep it where it lives) ---
+    actions.style.display = 'flex';
+    actions.style.alignItems = 'center';
+    actions.style.gap = '8px';
+
+    // Remove any previous right-box to avoid duplicates
+    const oldRight = actions.querySelector('[data-right-box]');
+    if (oldRight) oldRight.remove();
+
+    // Ensure Skip is the first child
+    if (btnSkip) actions.prepend(btnSkip);
+
+    // Build right side (Cancel + Log)
+    const right = document.createElement('div');
+    right.setAttribute('data-right-box','');
+    right.style.display = 'inline-flex';
+    right.style.gap = '8px';
+    right.style.marginLeft = 'auto';
+    if (btnCancel) right.appendChild(btnCancel);
+    if (btnLog)    right.appendChild(btnLog);
+    actions.appendChild(right);
+
+    // A little breathing room above the actions row
     actions.style.marginTop = refGapPx + 'px';
+
+    // --- Place Notes immediately AFTER the actions row (same parent) ---
+    if (notesBlock && actions.parentElement) {
+      // Detach Notes from its current parent if needed
+      if (notesBlock.parentElement !== actions.parentElement) {
+        try { notesBlock.parentElement?.removeChild(notesBlock); } catch(_){}
+      }
+      // Insert after actions
+      if (actions.nextSibling) actions.parentElement.insertBefore(notesBlock, actions.nextSibling);
+      else actions.parentElement.appendChild(notesBlock);
+      notesBlock.style.marginTop = refGapPx + 'px';
+    }
   }
 }
 
