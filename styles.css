@@ -322,7 +322,7 @@ button.ghost:focus-visible {
   border: 1px dashed var(--line);
   border-radius: 16px;
   padding: 14px;
-  margin: 12px 0;
+  margin: 0;
 }
 .summary-card h3{ margin: 0 0 8px 0; font-weight: 700; }
 
@@ -605,6 +605,74 @@ body[data-page="summary"] #summaryContent{ padding: 0; }
   display: grid;
   grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 12px;
+  align-items: stretch; /* ensure items in the same row match tallest height */
+}
+
+/* Summary default box: 4x5 ratio, half width (1 column), text-oriented */
+.summary-card.default {
+  aspect-ratio: 4 / 5;           /* width : height */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;   /* room for content */
+  gap: 8px;
+  font-size: 10px;               /* text inside defaults to 10 */
+}
+
+/* 4 Boxes Group: split one half-width card into 2x2 metric tiles */
+.summary-card.quad {
+  aspect-ratio: 4 / 5;                 /* same outer footprint as default */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Each small metric tile inside the quad */
+.summary-card.quad .quad {
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* Label above the number (size 10, weight 500) */
+.summary-card.quad .quad .label {
+  font-size: 10px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: #c7c7d0;
+  text-align: center;
+}
+
+/* The number itself (user color, weight 700, scales with tile) */
+.summary-card.quad .quad .value {
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.3px;
+  font-size: clamp(32px, 10vw, 96px);
+  text-align: center;
+}
+
+/* Wide box: same height as a quad block row, spans full width */
+.summary-card.wide {
+  grid-column: 1 / -1;                 /* stretch across both columns */
+  aspect-ratio: 8 / 5;                 /* width of two defaults; keeps height in family */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Box header that sits above a card (centered, size 10, weight 400) */
+.summary-box-header {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 400;
+  margin: 12px 0 6px;             /* a little breathing room */
 }
 @media (max-width: 720px){
   .summary-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
@@ -668,6 +736,6 @@ body[data-page="summary"] #summaryContent{ padding: 0; }
   display: grid;
   grid-template-columns: 1fr; /* single column */
   gap: 6px 0;
-  font-size: 13px; /* slightly smaller */
+  font-size: 10px;
 }
 .summary-stats b { font-weight: 800; }

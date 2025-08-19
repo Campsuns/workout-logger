@@ -1514,84 +1514,82 @@ function heat(pct){
 }
 
 function renderSummary(){
-  // update nav active state per current page restore
+  // keep nav active state in sync with current page
   document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===state.page));
 
-  const wrap=$('#summaryContent'); const period=state.period;
-  const st = streaks();
+  const wrap = document.getElementById('summaryContent');
+  if (!wrap) return;
 
-  // focus %
-  const pct = musclePercents(period);
-  const entries = Object.entries(pct).sort((a,b)=>b[1]-a[1]);
-  const top = entries.slice(0,7);
-  const neglected = entries.slice(-5);
-
-  // most improved
-  const imp = rankImprovements(period).slice(0,5);
-
+  // Fresh scaffold with placeholders — layout only
   wrap.innerHTML = `
-  <div class="block" style="padding:0 16px;">
-    <h4 style="margin:0 0 6px">Streaks</h4>
-    <div>Current: <b>${st.current}</b> weeks</div>
-    <div>Best: <b>${st.best}</b> weeks</div>
-    <div>Perfect weeks: <b>${st.perfectWeeks}</b></div>
-  </div>
-
-  <div class="block" style="padding:0 16px;">
-    <h4 style="margin:0 0 12px">Muscle Focus (${period})</h4>
-    <div id="mapWrap" style="display:grid; grid-template-columns:160px 1fr; gap:12px;">
-      <svg id="muscleMap" viewBox="0 0 120 220" style="width:160px; height:auto; background:#0f1015; border:1px solid #1f2028; border-radius:12px; padding:6px;">
-        <!-- mirrored silhouette -->
-        <rect id="ChestL" x="30" y="52" width="12" height="14" rx="3" />
-        <rect id="ChestR" x="78" y="52" width="12" height="14" rx="3" />
-        <rect id="AbsL" x="46" y="68" width="10" height="26" rx="3" />
-        <rect id="AbsR" x="64" y="68" width="10" height="26" rx="3" />
-        <rect id="QuadsL" x="46" y="112" width="12" height="34" rx="3" />
-        <rect id="QuadsR" x="62" y="112" width="12" height="34" rx="3" />
-        <rect id="HamsL" x="46" y="112" width="12" height="18" rx="3" />
-        <rect id="HamsR" x="62" y="112" width="12" height="18" rx="3" />
-        <rect id="GlutesL" x="48" y="98" width="10" height="10" rx="3" />
-        <rect id="GlutesR" x="62" y="98" width="10" height="10" rx="3" />
-        <rect id="CalvesL" x="46" y="150" width="10" height="22" rx="3" />
-        <rect id="CalvesR" x="64" y="150" width="10" height="22" rx="3" />
-        <rect id="Back" x="52" y="45" width="16" height="24" rx="3" />
-        <rect id="Trap" x="54" y="35" width="12" height="10" rx="3" />
-        <rect id="ShoulderL" x="38" y="42" width="10" height="8" rx="3" />
-        <rect id="ShoulderR" x="72" y="42" width="10" height="8" rx="3" />
-        <rect id="BicepsL" x="34" y="58" width="7" height="12" rx="3" />
-        <rect id="BicepsR" x="79" y="58" width="7" height="12" rx="3" />
-        <rect id="TricepsL" x="30" y="58" width="5" height="12" rx="3" />
-        <rect id="TricepsR" x="87" y="58" width="5" height="12" rx="3" />
-        <rect id="ForearmsL" x="30" y="74" width="8" height="12" rx="3" />
-        <rect id="ForearmsR" x="84" y="74" width="8" height="12" rx="3" />
-      </svg>
+    <div class="summary-grid">
+      
+      <!-- Row 1: 4 Boxes Group (left) -->
       <div>
-        <div style="margin-bottom:8px; font-weight:700">Top Focus</div>
-        ${top.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
-        
+        <div class="summary-box-header">4 Boxes Group</div>
+        <div class="summary-card quad">
+          <div class="quad"><div class="label">Metric A</div><div class="value">42</div></div>
+          <div class="quad"><div class="label">Metric B</div><div class="value">7</div></div>
+          <div class="quad"><div class="label">Metric C</div><div class="value">19</div></div>
+          <div class="quad"><div class="label">Metric D</div><div class="value">3</div></div>
+        </div>
       </div>
-    </div>
-  </div>
 
-  <div class="block" style="padding:0 16px;">
-    <h4 style="margin:0 0 6px">Most Improved (${period})</h4>
-    ${imp.length ? '<ol>'+imp.map(x=>`<li>${state.byId[x.id]?.name||x.id}: +${x.delta.toFixed(1)}</li>`).join('')+'</ol>' : '<div class="meta">No data yet</div>'}
-  </div>`;
+      <!-- Row 1: Default Box (right) -->
+      <div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
+          <div class="summary-stats">
+            <div>Placeholder content for a text-heavy box.</div>
+            <div>All text here is 10px.</div>
+          </div>
+        </div>
+      </div>
 
-  const color = (v)=>heat(Math.max(0,Math.min(100,(v||0))));
-  const set = (id,m)=>{ const el=$('#'+id); if(el) el.style.fill = color(pct[m]); };
+      <!-- Row 2: Wide Box (full width) -->
+      <div class="row-wide">
+        <div class="summary-box-header">Wide Box</div>
+        <div class="summary-card wide">
+          <div class="summary-stats">
+            <div>Wide placeholder content that spans across both columns.</div>
+          </div>
+        </div>
+      </div>
 
-  set('Back','Back'); set('Trap','Trapezius');
-  set('ChestL','Chest'); set('ChestR','Chest');
-  set('AbsL','Abs'); set('AbsR','Abs');
-  set('QuadsL','Quads'); set('QuadsR','Quads');
-  set('HamsL','Hamstrings'); set('HamsR','Hamstrings');
-  set('GlutesL','Glutes'); set('GlutesR','Glutes');
-  set('CalvesL','Calves'); set('CalvesR','Calves');
-  set('ShoulderL','Shoulders'); set('ShoulderR','Shoulders');
-  set('BicepsL','Biceps'); set('BicepsR','Biceps');
-  set('TricepsL','Triceps'); set('TricepsR','Triceps');
-  set('ForearmsL','Forearms'); set('ForearmsR','Forearms');
+      <!-- Row 3: Two Default Boxes -->
+      <div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
+          <div class="summary-stats">
+            <div>Placeholder box (left) with 10px text.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
+          <div class="summary-stats">
+            <div>Placeholder box (right) with 10px text.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Wide Box (full width) -->
+      <div class="row-wide">
+        <div class="summary-box-header">Wide Box</div>
+        <div class="summary-card wide">
+          <div class="summary-stats">
+            <div>Another wide placeholder spanning both columns.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>`;
+
+  // Ensure the full-width rows span across both grid columns without touching global CSS
+  wrap.querySelectorAll('.row-wide').forEach(node=>{
+    try{ node.style.gridColumn = '1 / -1'; } catch(_) {}
+  });
 }
 
 // ==== toast / flash ====
@@ -2353,85 +2351,79 @@ function recomputeSuggestionsV15(){
 renderSummary = function(){
   // Keep nav active state in sync
   document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===state.page));
-  const el = document.getElementById('summaryContent');
-  if(!el){ return; }
+  const wrap = document.getElementById('summaryContent');
+  if (!wrap) return;
 
-  // ---- Helpers: week/day aggregation ----
-  const ymdFromLog = (l)=>{
-    if (l && l.timestamp) {
-      const d = new Date(l.timestamp); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
-      return `${y}-${m}-${dd}`;
-    }
-    if (l && typeof l.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.date)) return l.date;
-    return null;
-  };
-  const mondayOf = (ymd)=>{ const d=new Date(ymd+'T12:00:00'); const w=new Date(d); w.setDate(d.getDate()-((d.getDay()+6)%7)); w.setHours(0,0,0,0); return w.toISOString().slice(0,10); };
-  const weeklyForUser = (uid)=>{
-    const map = new Map(); // weekKey -> Set(dayKeys)
-    (state.logs||[]).filter(l=> (l.user_id||'u_camp')===uid ).forEach(l=>{
-      const dk = ymdFromLog(l); if(!dk) return; const wk = mondayOf(dk);
-      if(!map.has(wk)) map.set(wk, new Set()); map.get(wk).add(dk);
-    });
-    return map;
-  };
-
-  // ---- Current user streaks ----
-  const curMap = weeklyForUser(state.userId);
-  const curWeeks = [...curMap.keys()].sort();
-  let cur=0, best=0, perfect=0, prevIdx=-2;
-  curWeeks.forEach((k,i)=>{
-    const sessions = (curMap.get(k)||new Set()).size;
-    const ok = sessions>=3;
-    if(ok){ if(i===prevIdx+1) cur+=1; else cur=1; best=Math.max(best,cur); if(sessions>=5) perfect+=1; prevIdx=i; } else { cur=0; }
-  });
-
-  // ---- Couple streak & scoreboard ----
-  const campMap  = weeklyForUser('u_camp');
-  const annieMap = weeklyForUser('u_annie');
-  const allWeeks = [...new Set([...campMap.keys(), ...annieMap.keys()])].sort();
-  let coupleCur=0, coupleBest=0, prev=-2;
-  let scoreCamp=0, scoreAnnie=0;
-  allWeeks.forEach((k,i)=>{
-    const c = (campMap.get(k)||new Set()).size;
-    const a = (annieMap.get(k)||new Set()).size;
-    if(c>=3 && a>=3){ if(i===prev+1) coupleCur+=1; else coupleCur=1; coupleBest=Math.max(coupleBest,coupleCur); prev=i; } else { coupleCur=0; }
-    if(c>a) scoreCamp++; else if(a>c) scoreAnnie++;
-  });
-
-  // ---- Weekly dots for current user ----
-  const wf = daysThisWeekFlags();
-
-  // ---- Build DOM using CSS classes (no inline layout styles) ----
-  el.innerHTML = `
+  // Fresh scaffold with placeholders — layout only
+  wrap.innerHTML = `
     <div class="summary-grid">
+      
+      <!-- Row 1: 4 Boxes Group (left) -->
       <div>
-        <div class="summary-title">Current Streak</div>
-        <div class="summary-card">
-          <div class="summary-metric" id="curStreakNum">${cur}</div>
+        <div class="summary-box-header">4 Boxes Group</div>
+        <div class="summary-card quad">
+          <div class="quad"><div class="label">Metric A</div><div class="value">42</div></div>
+          <div class="quad"><div class="label">Metric B</div><div class="value">7</div></div>
+          <div class="quad"><div class="label">Metric C</div><div class="value">19</div></div>
+          <div class="quad"><div class="label">Metric D</div><div class="value">3</div></div>
         </div>
       </div>
+
+      <!-- Row 1: Default Box (right) -->
       <div>
-        <div class="summary-title">Current Streak</div>
-        <div class="summary-card">
-          <div class="streak-dots" id="wkDots"></div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
           <div class="summary-stats">
-            <div class="summary-stat">Best: <b>${best}</b> weeks</div>
-            <div class="summary-stat">Perfect weeks: <b>${perfect}</b></div>
-            <div class="summary-stat">Couple Streak: <b>${coupleBest}</b> weeks</div>
-            <div class="summary-stat">Scoreboard: Camp <b>${scoreCamp}</b> – Annie <b>${scoreAnnie}</b></div>
+            <div>Placeholder content for a text-heavy box.</div>
+            <div>All text here is 10px.</div>
           </div>
         </div>
       </div>
+
+      <!-- Row 2: Wide Box (full width) -->
+      <div class="row-wide">
+        <div class="summary-box-header">Wide Box</div>
+        <div class="summary-card wide">
+          <div class="summary-stats">
+            <div>Wide placeholder content that spans across both columns.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Two Default Boxes -->
+      <div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
+          <div class="summary-stats">
+            <div>Placeholder box (left) with 10px text.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="summary-box-header">Default Box</div>
+        <div class="summary-card default">
+          <div class="summary-stats">
+            <div>Placeholder box (right) with 10px text.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Wide Box (full width) -->
+      <div class="row-wide">
+        <div class="summary-box-header">Wide Box</div>
+        <div class="summary-card wide">
+          <div class="summary-stats">
+            <div>Another wide placeholder spanning both columns.</div>
+          </div>
+        </div>
+      </div>
+
     </div>`;
 
-  // Populate dots
-  const dotsWrap = document.getElementById('wkDots');
-  if(dotsWrap){
-    dotsWrap.innerHTML = '';
-    for(let i=0;i<7;i++){
-      const s = document.createElement('span'); s.className = 'dot' + (wf.flags[i] ? ' on' : ''); dotsWrap.appendChild(s);
-    }
-  }
+  // Ensure the full-width rows span across both grid columns without touching global CSS
+  wrap.querySelectorAll('.row-wide').forEach(node=>{
+    try{ node.style.gridColumn = '1 / -1'; } catch(_) {}
+  });
 };
 
     
