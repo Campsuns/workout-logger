@@ -212,7 +212,30 @@ function equipDisplay(lbl){
 function markDone(exId){ const map=_loadMap('doneMap'); map[exId]=Date.now(); _saveMap('doneMap', map); }
 function isDone(exId){ const map=_loadMap('doneMap'); const ts=map[exId]; if(!ts) return false; const ageH=(Date.now()-ts)/(1000*60*60); return ageH<CONFIG.DONE_TTL_HOURS; }
 function chooseSide(exId){ const s=_loadMap('lastSide'); return s[exId]||'both'; }
+
 function saveSide(exId, side){ const s=_loadMap('lastSide'); s[exId]=side; _saveMap('lastSide', s); }
+
+// ---- Ensure yellow outline style for suggested workouts exists (non-destructive) ----
+function ensureSuggestStyles(){
+  if (document.querySelector('style[data-suggest-style]')) return; // already added
+  // If CSS already defines .card.suggested, do nothing.
+  const probe = document.createElement('div');
+  probe.className = 'card suggested';
+  probe.style.position='absolute'; probe.style.visibility='hidden'; probe.style.pointerEvents='none';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const hasOutline = cs.outlineStyle && cs.outlineStyle !== 'none' && cs.outlineWidth !== '0px';
+  document.body.removeChild(probe);
+  if (hasOutline) return;
+  const s = document.createElement('style');
+  s.setAttribute('data-suggest-style','');
+  s.textContent = `
+    :root{ --suggest: #f5d061; }
+    .card.suggested{ outline: 2px dashed var(--suggest); outline-offset: -2px; }
+    .card.suggested .repsets{ border-color: var(--suggest); color: var(--suggest); }
+  `;
+  document.head.appendChild(s);
+}
 
 // === Period tabs (Week/Month/Year) sliding pill helper ===
 function ensurePeriodSlider(container, current){
@@ -316,29 +339,111 @@ function prevLineInlineHTML(exId, side){
   const d = _prevTripletData(exId, side);
   return d ? ` <span class="prevline">(${d.w}x${d.r}x${d.s})</span>` : '';
 }
+
+// ==== Delta helpers ====
+function _sign(n){ return n>0?'+':(n<0?'-':''); }
+function _fmtAbs(n){ return Math.abs(Math.round(Number(n)||0)); }
+function _deltaSpan(val, unit){
+  const s = _sign(val);
+  const abs = _fmtAbs(val);
+  const txt = (s? s : '') + abs + ' ' + unit;
+  const color = val>0? 'var(--accent)' : (val<0? 'var(--danger)' : 'var(--muted)');
+  return `<span class="delta" style="color:${color}">${txt}</span>`;
+}
+function deltaLineHTML(exId, side){
+  const want = String(side||'both').toLowerCase();
+
+  const tsOf = (l)=>{
+    if(!l) return 0; const t = l.timestamp || l.date; return t ? new Date(t).getTime() : 0;
+  };
+
+  // Build a "lb / Rep" pair but include only non-zero deltas
+  const pairIfChanged = (dW, dR)=>{
+    const segs = [];
+    if (Number(dW||0) !== 0) segs.push(_deltaSpan(dW, 'lb'));
+    if (Number(dR||0) !== 0) segs.push(_deltaSpan(dR, 'Rep'));
+    return segs.join(' / ');
+  };
+
+  // Explicit unilateral: show only non-zero parts; hide if nothing changed
+  if(want!=="both"){
+    const sug = suggestNext(exId, want);
+    const last = latestFor(exId, want);
+    if(!last) return '';
+    const dW = Number(sug.weight||0) - Number(last.weight_lb||0);
+    const dR = Number(sug.reps||0)   - Number(last.planned_reps||0);
+    const txt = pairIfChanged(dW, dR);
+    return txt ? ` <span class="prevline">(${txt})</span>` : '';
+  }
+
+  // BOTH requested → decide unified vs per-side based on the most recent log
+  const lastBoth = latestFor(exId, 'both');
+  const lastR = latestFor(exId, 'right');
+  const lastL = latestFor(exId, 'left');
+  const newest = Math.max(tsOf(lastBoth), tsOf(lastR), tsOf(lastL));
+
+  // If last log was BOTH → show unified pair, only if any change
+  if(lastBoth && tsOf(lastBoth) === newest){
+    const sug = suggestNext(exId, 'both');
+    const dW = Number(sug.weight||0) - Number(lastBoth.weight_lb||0);
+    const dR = Number(sug.reps||0)   - Number(lastBoth.planned_reps||0);
+    const txt = pairIfChanged(dW, dR);
+    return txt ? ` <span class="prevline">(${txt})</span>` : '';
+  }
+
+  // Otherwise, show per-side weight deltas only if non-zero; hide line if both zero
+  const parts = [];
+  if(lastR){
+    const sugR = suggestNext(exId, 'right');
+    const dWR = Number(sugR.weight||0) - Number(lastR.weight_lb||0);
+    if (dWR !== 0) {
+      const col = dWR > 0 ? 'var(--accent)' : 'var(--danger)';
+      const seg = `<span style="color:${col}">Right: ${_sign(dWR)}${_fmtAbs(dWR)} lb</span>`;
+      parts.push(seg);
+    }
+  }
+  if(lastL){
+    const sugL = suggestNext(exId, 'left');
+    const dWL = Number(sugL.weight||0) - Number(lastL.weight_lb||0);
+    if (dWL !== 0) {
+      const col = dWL > 0 ? 'var(--accent)' : 'var(--danger)';
+      const seg = `<span style="color:${col}">Left: ${_sign(dWL)}${_fmtAbs(dWL)} lb</span>`;
+      parts.push(seg);
+    }
+  }
+  return parts.length ? ` <span class="prevline">(${parts.join(', ')})</span>` : '';
+}
 function suggestNext(exId, side){
-  const ex = state.byId[exId]; 
-  if(!ex) return { weight:Number(ex?.default_weight||0), reps:8, sets:Number(ex?.sets||3), height:Number(ex?.default_height||0) };
-  const last = latestFor(exId, side);
-  if(!last) return { weight:Number(ex.default_weight||0), reps:8, sets:Number(ex.sets||3), height:Number(ex.default_height||0) };
-
-  let reps = Number(last.planned_reps||8);
-  let wt   = Number(last.weight_lb||ex.default_weight||0);
-  let h    = Number(last.height||ex.default_height||0);
-  const fail = Number(last.fail_reps||reps);
-  const rpe  = Number(last.rpe_set2||8);
-
-  // Rep-first within 6–12 then +5 lb. Soft deload if struggle.
-  if (fail >= reps && reps < CONFIG.REP_MAX && rpe <= 8) {
-    reps++;
-  } else if (reps >= CONFIG.REP_MAX && fail >= reps-1) {
-    wt += CONFIG.DEFAULT_INC_LB;
-    reps = Math.max(CONFIG.REP_MIN, 8);
+  const ex = state.byId[exId];
+  if(!ex){
+    return { weight: 0, reps: 8, sets: 3, height: 0 };
   }
-  if (fail <= Math.max(CONFIG.REP_MIN-1, reps-3) || rpe >= 9) {
-    reps = Math.max(CONFIG.REP_MIN, reps-1);
+  const lastRaw = latestFor(exId, side);
+  if(!lastRaw){
+    return {
+      weight: Number(ex.default_weight||0),
+      reps:   8,
+      sets:   Number(ex.sets||3),
+      height: Number(ex.default_height||0)
+    };
   }
-  return { weight: wt, reps, sets: Number(ex.sets||3), height: h };
+
+  // Normalize fields so the perf logic always has numbers
+  const last = {
+    planned_reps: Number(lastRaw.planned_reps ?? 8),
+    fail_reps:    Number((lastRaw.fail_reps   ?? lastRaw.planned_reps) ?? 8),
+    weight_lb:    Number(lastRaw.weight_lb    ?? ex.default_weight ?? 0),
+    rpe_set2:     Number(lastRaw.rpe_set2     ?? 8)
+  };
+
+  // Use the consolidated logic (see computeNextFromPerformance below)
+  const out = computeNextFromPerformance(last, ex);
+  return {
+    weight: Number(out.weight||0),
+    reps:   Number(out.reps||8),
+    sets:   Number(ex.sets||3),
+    height: Number(ex.default_height||0)
+  };
 }
 
 // ==== Improvements / Streaks (use ONLY current user's logs) ====
@@ -408,6 +513,7 @@ async function fetchAll(){
   // Build map only from CURRENT user's exercises to avoid cross-user names in Summary
   state.byId = Object.fromEntries(exercisesForUser().map(e=>[e.id, e]));
 
+  ensureSuggestStyles();
   renderUserChips();
   renderFilters();
   renderList();
@@ -449,6 +555,96 @@ document.addEventListener('click', (e)=>{
   ensurePeriodSlider(cont, cur);
 })();
 
+// ---- Weekly unique-day count per user (local week) ----
+function _weekDayCountFor(uid){
+  const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 0; // 0=Sun default
+  const now   = new Date();
+  const start = _startOfWeekLocal(now, ws);
+  const end   = new Date(start); end.setDate(start.getDate()+7);
+  const seen = new Set();
+  for (const l of (state.logs || [])) {
+    if ((l.user_id || 'u_camp') !== uid) continue;
+    const key = _localYMDFromLog(l); if (!key) continue;
+    const dt = new Date(key + 'T12:00:00');
+    if (dt >= start && dt < end) seen.add(key);
+  }
+  return seen.size;
+}
+
+// ---- Render the mini scoreboard between the two user chips ----
+function renderScoreMini(){
+  const row = document.querySelector('#userRow');
+  if (!row) return;
+
+  const chips = Array.from(row.querySelectorAll('.user-chip'));
+  const campBtn  = chips.find(b => (b.dataset.user||'')==='u_camp')  || chips[0];
+  const annieBtn = chips.find(b => (b.dataset.user||'')==='u_annie') || chips[1];
+  if(!campBtn || !annieBtn) return;
+
+  // Layout: 4 columns (Camp chip | Camp count | Annie count | Annie chip)
+  try {
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '1fr auto auto 1fr';
+    row.style.columnGap = '12px';
+    row.style.alignItems = 'center';
+  } catch (_) {}
+
+  // Create/update cubes
+  let campBox = document.getElementById('scoreCampBox');
+  let annBox  = document.getElementById('scoreAnnieBox');
+  if(!campBox){ campBox=document.createElement('div'); campBox.id='scoreCampBox'; }
+  if(!annBox ){ annBox =document.createElement('div'); annBox.id ='scoreAnnieBox'; }
+
+  // Style the cubes consistently (no transforms, no rAF)
+  const cs = getComputedStyle(campBtn);
+  const h  = cs.height || '40px';
+  const r  = cs.borderRadius || '12px';
+  const styleCube = (el)=>{
+    el.style.display        = 'inline-flex';
+    el.style.alignItems     = 'center';
+    el.style.justifyContent = 'center';
+    el.style.height         = h;
+    el.style.width          = h;           // square
+    el.style.lineHeight     = h;           // center text vertically
+    el.style.border         = '1px solid var(--line)';
+    el.style.borderRadius   = r;
+    el.style.background     = 'var(--soft)';
+    el.style.fontWeight     = '800';
+    el.style.fontSize       = '13px';
+    el.style.boxSizing      = 'border-box';
+    el.style.color          = 'var(--fg)';
+    el.style.boxShadow      = 'none';
+    el.classList.remove('lead');
+  };
+  styleCube(campBox); styleCube(annBox);
+
+  // Counts for this week (unique workout days)
+  const cCount = _weekDayCountFor('u_camp');
+  const aCount = _weekDayCountFor('u_annie');
+  campBox.textContent = String(cCount);
+  annBox.textContent  = String(aCount);
+
+  // Leader highlight with current accent (ties: none)
+  const campAhead  = cCount > aCount;
+  const annieAhead = aCount > cCount;
+  const applyLead = (el, on)=>{
+    if (on) {
+      el.style.borderColor = 'var(--accent)';
+      el.style.boxShadow   = 'inset 0 0 0 2px var(--accent-weak)';
+    } else {
+      el.style.borderColor = 'var(--line)';
+      el.style.boxShadow   = 'none';
+    }
+  };
+  applyLead(campBox, campAhead);
+  applyLead(annBox,  annieAhead);
+
+  // Order: Camp chip, Camp count, Annie count, Annie chip
+  if (campBox.parentElement !== row) row.insertBefore(campBox, annieBtn);
+  if (annBox.parentElement  !== row) row.insertBefore(annBox,  annieBtn);
+  else if (annBox.nextSibling !== annieBtn) row.insertBefore(annBox, annieBtn);
+}
+
 // ==== Filters & chips ====
 function renderUserChips(){
   const row = document.querySelector('#userRow');
@@ -475,7 +671,9 @@ function renderUserChips(){
       renderFilters();
       renderList();
       renderSummary();
+      renderScoreMini();
     };
+      renderScoreMini();
   });
   document.body.classList.toggle('annie', state.userId === 'u_annie');
 }
@@ -526,7 +724,7 @@ function makeCardHTML(e){
       <div class="name-line"><span class="name">${e.name}</span>${variation}</div>
       <div class="meta line">${setupLine || '&nbsp;'}</div>
       <div class="weight line">
-        ${fmt(sugg.weight)} lb ${prevLineInlineHTML(e.id, chooseSide(e.id))}
+        ${fmt(sugg.weight)} lb${deltaLineHTML(e.id, chooseSide(e.id))}
       </div>
     </div>
     <div class="pill repsets">${fmt(sugg.reps)} × ${fmt(sugg.sets)}</div>
@@ -592,7 +790,7 @@ function openLog(exId){
   modal.dataset.didOther='';
   delete modal.dataset.arranged; // ensure arrangeLogLayout() re-runs each open
 
-  $('#logTitle').textContent = curEx.name;
+  $('#logTitle').innerHTML = curEx.name + (curEx.variation ? ` <span class="variation">• ${curEx.variation}</span>` : '');
   const baseSub = [musclesOf(curEx).filter(Boolean).join('/'), curEx.equipment].filter(Boolean).join(' • ');
   $('#logSub').innerHTML = baseSub + prevLineInlineHTML(exId, chooseSide(exId));
 
@@ -1237,6 +1435,8 @@ document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', 
 document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
 const first = document.getElementById('page-'+state.page); if(first) first.classList.add('active');
 
+document.addEventListener('DOMContentLoaded', ensureSuggestStyles);
+
 
 // ====== PATCH v5 ======
 // Make Summary its own page (toggle display) + body[data-page]
@@ -1732,6 +1932,7 @@ function _startOfWeekLocal(d, weekStart){
   return date;
 }
 
+
 function _dateOnlyLocal(val){
   // Prefer YYYY-MM-DD as-is; otherwise build local date string
   if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
@@ -1742,27 +1943,62 @@ function _dateOnlyLocal(val){
   return `${y}-${m}-${day}`;
 }
 
+// Helper: Derive local YYYY-MM-DD for a log, preferring timestamp
+function _localYMDFromLog(l){
+  // Prefer timestamp (ISO string) to avoid sheet timezone quirks
+  if (l && l.timestamp) {
+    const d = new Date(l.timestamp);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`; // local Y-M-D from timestamp
+  }
+  // Fallback to `date` (YYYY-MM-DD). Parse as LOCAL date by components to avoid UTC parsing.
+  if (l && typeof l.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.date)){
+    const [y,m,day] = l.date.split('-').map(Number);
+    const d = new Date(y, m-1, day, 12, 0, 0); // local noon to dodge DST edges
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${yy}-${mm}-${dd}`;
+  }
+  // Last resort: let the old helper try
+  return _dateOnlyLocal(l?.date || l?.timestamp || new Date());
+}
+
 function daysThisWeekFlags(){
-  const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 1; // 1=Mon
-  const start = _startOfWeekLocal(new Date(), ws);           // local midnight at week start
-  const end   = new Date(start); end.setDate(start.getDate()+7); // half-open [start, end)
+  // Week start: 0=Sun, 1=Mon, etc. Default to Sunday unless CONFIG overrides
+  const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 0;
 
-  // Collect unique local YYYY-MM-DD inside this week window
-  const daySet = new Set();
-  for(const l of logsForUser()){
-    const key = _dateOnlyLocal(l.date || l.timestamp);
-    const dt  = new Date(key+'T12:00:00'); // local noon avoids DST edge cases
-    if (dt >= start && dt < end) daySet.add(key);
+  // Local week window [start, end)
+  const now   = new Date();
+  const start = _startOfWeekLocal(now, ws);           // local midnight at week start
+  const end   = new Date(start); end.setDate(start.getDate()+7);
+
+  // Prepare flags and a dedupe set so multiple logs on the same day still count once
+  const flags = new Array(7).fill(false);
+  const seen  = new Set(); // YYYY-MM-DD strings we've already counted
+
+  // Helper: map a local YYYY-MM-DD to an index 0–6 relative to start
+  const indexForDay = (yyyy_mm_dd)=>{
+    // build at local noon to dodge DST edges, then compare to `start`
+    const d = new Date(yyyy_mm_dd + 'T12:00:00');
+    const idx = Math.floor((d - start) / (24*60*60*1000));
+    return idx;
+  };
+
+  // Convert current user's logs to day flags in this week (derive LOCAL Y-M-D from timestamp when possible)
+  for (const l of logsForUser()){
+    const key = _localYMDFromLog(l);
+    if (!key) continue;
+    const dt  = new Date(key + 'T12:00:00');
+    if (dt < start || dt >= end) continue; // outside this week window
+    if (seen.has(key)) continue;           // already counted this day
+    const idx = Math.floor((dt - start) / (24*60*60*1000));
+    if (idx >= 0 && idx < 7){ flags[idx] = true; seen.add(key); }
   }
 
-  // Build flags in order from week start + i
-  const flags = [];
-  for(let i=0;i<7;i++){
-    const d = new Date(start); d.setDate(start.getDate()+i);
-    const key = _dateOnlyLocal(d);
-    flags.push(daySet.has(key));
-  }
-  const count = flags.reduce((a,b)=>a + (b?1:0), 0);
+  const count = flags.reduce((a,b)=> a + (b ? 1 : 0), 0);
   return { count, flags };
 }
 
@@ -1784,6 +2020,13 @@ function computeNextFromPerformance(last, ex){
   // 1) Deload if needed
   if (failedAttempts > 0 || veryHighRPE || reps < min) {
     wt = Math.max(0, wt - CONFIG.DEFAULT_INC_LB);
+    reps = min;
+    return { weight: wt, reps };
+  }
+
+  // 1b) Huge over-performance: ≥2.25× planned reps with low RPE → 3 increments, reset reps
+  if (overRatio >= 2.25 && lowRPE) {
+    wt += CONFIG.DEFAULT_INC_LB * (CONFIG.OVERPERF_BIG_INC_STEPS + 1); // typically +15 lb when default inc is 5
     reps = min;
     return { weight: wt, reps };
   }
@@ -1853,16 +2096,41 @@ function applySuggestionHighlightV15(){
 }
 function recomputeSuggestionsV15(){
   try{
-    const picks = suggestWorkoutsV15(5);
-    state.suggestIds = new Set(picks.map(p=>p.id));
+    let picks = suggestWorkoutsV15(5);
+
+    // Fallback: if nothing is suggested (e.g., all muscles equally worked or no recent data),
+    // suggest the least-recently-done exercises that aren't already marked done today.
+    if(!picks || picks.length === 0){
+      const doneSet = new Set(Object.keys(_loadMap('doneMap')||{}));
+      const recentMap = new Map(); // exId -> most recent date (YYYY-MM-DD)
+      for(const l of logsForUser()){
+        const d = _isoDate(l.date || l.timestamp);
+        const prev = recentMap.get(l.exercise_id);
+        if(!prev || d > prev) recentMap.set(l.exercise_id, d);
+      }
+      const pool = exercisesForUser().filter(e => !doneSet.has(e.id));
+      // Oldest-first by last done date; never-done first
+      pool.sort((a,b)=>{
+        const da = recentMap.get(a.id) || '0000-00-00';
+        const db = recentMap.get(b.id) || '0000-00-00';
+        if(da === db) return a.name.localeCompare(b.name);
+        return da < db ? -1 : 1;
+      });
+      picks = pool.slice(0,3);
+    }
+
+    state.suggestIds = new Set((picks||[]).map(p=>p.id));
     applySuggestionHighlightV15();
+
     const s = document.getElementById('suggestWrap');
     if(s){
-      s.innerHTML = '<h3>Suggested Workouts (today)</h3>' + (picks.length ?
+      s.innerHTML = '<h3>Suggested Workouts (today)</h3>' + ((picks&&picks.length) ?
         '<div class="suggest-list">' + picks.map(p=>`<div class="suggest-item"><span class="name">${p.name}${p.variation? ' • '+p.variation:''}</span><span class="suggest-tag">Suggested</span></div>`).join('') :
         '<div class="meta">No suggestions yet.</div>');
     }
-  }catch(_){}
+  }catch(err){
+    console.error('suggestions failed', err);
+  }
 }
 (function(){
   if(typeof fetchAll==='function'){
@@ -1881,67 +2149,88 @@ function recomputeSuggestionsV15(){
   }
 })();
 
-const _prevRenderSummary = (typeof renderSummary==='function' ? renderSummary : null);
 renderSummary = function(){
+  // Keep nav active state in sync
   document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===state.page));
   const el = document.getElementById('summaryContent');
-  if(!el){ if(_prevRenderSummary) _prevRenderSummary(); return; }
+  if(!el){ return; }
 
-  const st = (typeof streaks==='function' ? streaks() : {current:0,best:0,perfectWeeks:0});
-  const weekFlags = daysThisWeekFlags();
-  const pct = (typeof musclePercents==='function' ? musclePercents(state.period) : {});
-  const entries = Object.entries(pct).sort((a,b)=>b[1]-a[1]);
-  const top = entries.slice(0,7);
-  const neglected = entries.slice(-5);
-  const imp = (typeof rankImprovements==='function' ? rankImprovements(state.period).slice(0,5) : []);
+  // ---- Helpers: week/day aggregation ----
+  const ymdFromLog = (l)=>{
+    if (l && l.timestamp) {
+      const d = new Date(l.timestamp); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${dd}`;
+    }
+    if (l && typeof l.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.date)) return l.date;
+    return null;
+  };
+  const mondayOf = (ymd)=>{ const d=new Date(ymd+'T12:00:00'); const w=new Date(d); w.setDate(d.getDate()-((d.getDay()+6)%7)); w.setHours(0,0,0,0); return w.toISOString().slice(0,10); };
+  const weeklyForUser = (uid)=>{
+    const map = new Map(); // weekKey -> Set(dayKeys)
+    (state.logs||[]).filter(l=> (l.user_id||'u_camp')===uid ).forEach(l=>{
+      const dk = ymdFromLog(l); if(!dk) return; const wk = mondayOf(dk);
+      if(!map.has(wk)) map.set(wk, new Set()); map.get(wk).add(dk);
+    });
+    return map;
+  };
 
+  // ---- Current user streaks ----
+  const curMap = weeklyForUser(state.userId);
+  const curWeeks = [...curMap.keys()].sort();
+  let cur=0, best=0, perfect=0, prevIdx=-2;
+  curWeeks.forEach((k,i)=>{
+    const sessions = (curMap.get(k)||new Set()).size;
+    const ok = sessions>=3;
+    if(ok){ if(i===prevIdx+1) cur+=1; else cur=1; best=Math.max(best,cur); if(sessions>=5) perfect+=1; prevIdx=i; } else { cur=0; }
+  });
+
+  // ---- Couple streak & scoreboard ----
+  const campMap  = weeklyForUser('u_camp');
+  const annieMap = weeklyForUser('u_annie');
+  const allWeeks = [...new Set([...campMap.keys(), ...annieMap.keys()])].sort();
+  let coupleCur=0, coupleBest=0, prev=-2;
+  let scoreCamp=0, scoreAnnie=0;
+  allWeeks.forEach((k,i)=>{
+    const c = (campMap.get(k)||new Set()).size;
+    const a = (annieMap.get(k)||new Set()).size;
+    if(c>=3 && a>=3){ if(i===prev+1) coupleCur+=1; else coupleCur=1; coupleBest=Math.max(coupleBest,coupleCur); prev=i; } else { coupleCur=0; }
+    if(c>a) scoreCamp++; else if(a>c) scoreAnnie++;
+  });
+
+  // ---- Weekly dots for current user ----
+  const wf = daysThisWeekFlags();
+
+  // ---- Build DOM using CSS classes (no inline layout styles) ----
   el.innerHTML = `
-    <section class="summary-card" id="streakCard">
-      <h3>Streaks</h3>
-      <div>Current: <b>${st.current}</b> weeks</div>
-      <div>Best: <b>${st.best}</b> weeks</div>
-      <div>Perfect weeks: <b>${st.perfectWeeks}</b></div>
-      <div>Days this week: <b>${weekFlags.count}</b></div>
-      <div class="consistency">${weekFlags.flags.map(f=>`<div class="dot${f?' on':''}"></div>`).join('')}</div>
-    </section>
-
-    <section class="summary-card" id="focusCard">
-      <h3>Muscle Focus (${state.period})</h3>
-      <div style="display:grid; grid-template-columns:160px 1fr; gap:12px;">
-        <div id="miniMap" style="width:160px;height:220px;border:1px solid var(--line);border-radius:12px;background:#0f1015;"></div>
-        <div>
-          <div style="margin-bottom:8px;font-weight:700">Top Focus</div>
-          ${top.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
-          <div style="margin:12px 0 8px;font-weight:700">Most Neglected</div>
-          ${neglected.map(([m,v])=>`<div>${m}: <b>${v}%</b></div>`).join('') || '<div class="meta">No data</div>'}
+    <div class="summary-grid">
+      <div>
+        <div class="summary-title">Current Streak</div>
+        <div class="summary-card">
+          <div class="summary-metric" id="curStreakNum">${cur}</div>
         </div>
       </div>
-    </section>
+      <div>
+        <div class="summary-title">Current Streak</div>
+        <div class="summary-card">
+          <div class="streak-dots" id="wkDots"></div>
+          <div class="summary-stats">
+            <div class="summary-stat">Best: <b>${best}</b> weeks</div>
+            <div class="summary-stat">Perfect weeks: <b>${perfect}</b></div>
+            <div class="summary-stat">Couple Streak: <b>${coupleBest}</b> weeks</div>
+            <div class="summary-stat">Scoreboard: Camp <b>${scoreCamp}</b> – Annie <b>${scoreAnnie}</b></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 
-    <section class="summary-card" id="improvedCard">
-      <h3>Most Improved (${state.period})</h3>
-      ${imp.length ? '<ol>'+imp.map(x=>`<li>${state.byId[x.id]?.name||x.id}: +${x.delta.toFixed(1)}</li>`).join('')+'</ol>' : '<div class="meta">No data yet</div>'}
-    </section>
-
-    <section class="summary-card" id="suggestWrap">
-      <h3>Suggested Workouts (today)</h3>
-      <div class="meta">Computing…</div>
-    </section>
-  `;
-
-  // If we're in a loading state, animate the week dots with a subtle stagger
-  if (state.loading) {
-    const row = document.querySelector('#streakCard .consistency');
-    if (row) {
-      row.classList.add('loading');
-      const dots = row.querySelectorAll('.dot');
-      dots.forEach((d,i)=>{ d.style.animationDelay = (i*70)+'ms'; });
+  // Populate dots
+  const dotsWrap = document.getElementById('wkDots');
+  if(dotsWrap){
+    dotsWrap.innerHTML = '';
+    for(let i=0;i<7;i++){
+      const s = document.createElement('span'); s.className = 'dot' + (wf.flags[i] ? ' on' : ''); dotsWrap.appendChild(s);
     }
   }
-
-  // Color the minimap if an existing painter exists; otherwise noop
-  if (typeof paintMiniMap==='function') {
-    paintMiniMap('miniMap', pct);
-  }
-  recomputeSuggestionsV15();
 };
+
+    
