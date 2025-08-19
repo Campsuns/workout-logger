@@ -57,11 +57,28 @@ function ensureLoadingStyles(){
     #miniLoad.loading .d{ animation: dotBounce 700ms ease-in-out infinite; }
 
     /* Full-screen wipe overlay while switching profiles */
-    #switchOverlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; background: var(--accent); will-change: transform, opacity; }
-    #switchOverlay .wipe{ display:flex; gap:12px; }
-    #switchOverlay .dot{ width:14px; height:14px; border-radius:50%; border:2px solid #fff; background:transparent; box-shadow:0 0 0 0 rgba(0,0,0,0.12); }
+    #switchOverlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; background: var(--accent); will-change: transform, opacity; flex-direction: column; }
+    #switchOverlay .wipe{ display:flex; gap:6px; }
+    #switchOverlay .dot{ width:10px; height:10px; border-radius:4px !important; border:2px solid #fff; background:transparent; box-shadow:0 0 0 0 rgba(0,0,0,0.12); }
+    #switchOverlay .burn-top,
+    #switchOverlay .burn-bottom{
+      width: 100%;
+      max-width: 65%;
+      margin-left: auto; margin-right: auto;
+      text-align: center;
+      padding: 6px 14px;
+      box-sizing: border-box;
+    }
+    #switchOverlay .burn-top{
+      font-weight: 500;          /* bold */
+      font-style: normal;        /* not italic */
+      font-size: calc(100% + 2px); /* +3px from inherited size */
+      opacity: .95;
+      margin: 5px 0 10px;         /* scoot up (smaller top), tight gap to dots */
+    }
+    #switchOverlay .burn-bottom{ font-weight: 400; font-style: italic; margin: 8px 0 10px; }
+    #switchOverlay.loading .dot{ border-radius:4px !important; animation: dotBounce 700ms ease-in-out infinite; }
     #switchOverlay .dot.on{ background:#fff; }
-    #switchOverlay.loading .dot{ animation: dotBounce 700ms ease-in-out infinite; }
 
     /* Slide directions */
     /* Right-directed (enter from right, exit to left) */
@@ -83,6 +100,95 @@ function ensureLoadingStyles(){
   }
   s.textContent = css;
 }
+
+
+function ensureBurnTextElements(){
+  const ov = document.getElementById('switchOverlay');
+  if(!ov) return null;
+  let top = ov.querySelector('.burn-top');
+  let bot = ov.querySelector('.burn-bottom');
+  if(!top){ top = document.createElement('div'); top.className='burn-top'; ov.insertBefore(top, ov.firstChild); }
+  top.style.transform = 'translateY(-5px)';
+  if(!bot){ bot = document.createElement('div'); bot.className='burn-bottom'; ov.appendChild(bot); }
+  return { top, bot };
+}
+
+const BURN_LINES = [
+  { top:"loading your workouts…", bottom:"but your {muscle} hasn’t seen a load since dial-up. time to pull some weight." },
+  { top:"fetching your stats…", bottom:"{muscle} day’s still waiting in the lost and found. go reclaim it." },
+  { top:"warming up your muscles…", bottom:"except your {muscle}, which is still in hibernation. wake it up." },
+  { top:"analyzing progress…", bottom:"{muscle} reports: ‘404 gains not found.’ fix that today." },
+  { top:"calibrating strength…", bottom:"{muscle} is still on factory settings. upgrade overdue." },
+  { top:"syncing history…", bottom:"your {muscle} history is a short story. let’s write a comeback arc." },
+  { top:"prepping your plan…", bottom:"your {muscle} plan’s been ‘pending’. hit start." },
+  { top:"crunching numbers…", bottom:"{muscle} is still counting to three. aim for sets, not guesses." },
+  { top:"optimizing performance…", bottom:"{muscle} performance capped at demo mode. unlock the full version." },
+  { top:"checking equipment…", bottom:"your {muscle} didn’t check in. roll call’s today." },
+  { top:"loading momentum…", bottom:"{muscle} took a detour. gps says: straight to the rack." },
+  { top:"rebuilding routine…", bottom:"{muscle} needs bricks, not wishes. lay a set." },
+  { top:"tuning form…", bottom:"{muscle} form’s on mute. turn it up with reps." },
+  { top:"measuring effort…", bottom:"{muscle} effort stuck on airplane mode. toggle beast mode." },
+  { top:"fetching PRs…", bottom:"{muscle} says ‘pr? first time hearing it.’ introduce yourselves." },
+  { top:"compiling progress…", bottom:"{muscle} won’t compile without sets. ship a workout." },
+  { top:"hydrating data…", bottom:"{muscle} is thirsty—for volume. sip later, lift now." },
+  { top:"scanning recovery…", bottom:"{muscle} recovered… from doing nothing. time to work." },
+  { top:"waking the app…", bottom:"your {muscle} hit snooze again. alarm set to lift." },
+  { top:"stabilizing signals…", bottom:"{muscle} signal is weak. add sets for full bars." },
+  { top:"assembling warmup…", bottom:"{muscle} is warmed—by excuses. heat it with reps." },
+  { top:"plotting the session…", bottom:"{muscle} arc needs conflict. enter: heavy weights." },
+  { top:"loading discipline…", bottom:"{muscle} keeps buffering. press play on set one." },
+  { top:"checking symmetry…", bottom:"{muscle} didn’t get the memo. balance starts now." },
+  { top:"priming output…", bottom:"{muscle} is whispering. make it shout—one more rep." }
+];
+
+function updateLoadingBurn(){
+  // Ensure styles and nodes
+  ensureLoadingStyles();
+  const nodes = ensureBurnTextElements();
+  if (!nodes || !nodes.top || !nodes.bot) return;
+
+  // Context = user + muscle (so switching users rotates lines)
+  const uid = state && state.userId ? String(state.userId) : 'u_camp';
+  let muscle = 'back';
+  try { muscle = String(mostNeglectedMuscleThisWeek() || 'back').toLowerCase(); } catch(_) {}
+  const contextKey = uid + '|' + muscle;
+
+  // Session burn state buckets
+  if (!state._burnState) state._burnState = {};
+  let bucket = state._burnState[contextKey];
+
+  // Create a fresh shuffled order; avoid repeating lastIdx first
+  const fresh = (avoidIdx) => {
+    const idxs = BURN_LINES.map((_, i) => i);
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+    }
+    if (typeof avoidIdx === 'number' && idxs.length > 1 && idxs[0] === avoidIdx) {
+      const swapWith = 1 + Math.floor(Math.random() * (idxs.length - 1));
+      [idxs[0], idxs[swapWith]] = [idxs[swapWith], idxs[0]];
+    }
+    return { order: idxs, idx: 0, lastIdx: avoidIdx };
+  };
+
+  if (!bucket || !Array.isArray(bucket.order) || bucket.idx >= bucket.order.length) {
+    const avoid = bucket && typeof bucket.lastIdx === 'number' ? bucket.lastIdx : undefined;
+    bucket = fresh(avoid);
+    state._burnState[contextKey] = bucket;
+  }
+
+  const lineIdx = bucket.order[bucket.idx++];
+  bucket.lastIdx = lineIdx;
+
+  const raw = BURN_LINES[lineIdx] || { setup: 'loading {{muscle}}…', punch: 'time to get after it' };
+  const topTxt = (raw.setup ?? raw.top ?? '').toString();
+  const botTxt = (raw.punch ?? raw.bottom ?? '').toString();
+  // replace both {{muscle}} and {muscle}, case-insensitive, and guard against undefined
+const fill = s => String(s || '').replace(/\{\{\s*muscle\s*\}\}|\{\s*muscle\s*\}/gi, muscle);
+nodes.top.textContent = fill(topTxt);
+nodes.bot.textContent = fill(botTxt);
+}
+
 function setLoading(on){
   state.loading = !!on;
   document.body.classList.toggle('is-loading', !!on);
@@ -116,6 +222,14 @@ function setLoading(on){
     }
     ov.appendChild(wrap);
     document.body.appendChild(ov);
+    if (on) updateLoadingBurn();
+    // Allow shuffling a new burn on each click while loading (bound only once)
+    if (!ov._burnClickBound) {
+      ov.addEventListener('click', () => {
+        try { if (state && state.loading) updateLoadingBurn(); } catch (_) {}
+      });
+      ov._burnClickBound = true;
+    }
   }
 
   // Direction based on the target user
@@ -131,8 +245,17 @@ function setLoading(on){
 
   // Play animations
   if (on) {
+    // Always pick a fresh burn for every show (even if overlay already exists)
+    try { updateLoadingBurn(); } catch(_) {}
     ov.style.display = 'flex';
     ov.classList.add('loading'); // enable dot bounce during load
+    // Ensure click-to-shuffle is active whenever we show the overlay
+    if (!ov._burnClickBound) {
+      ov.addEventListener('click', () => {
+        try { if (state && state.loading) updateLoadingBurn(); } catch (_) {}
+      });
+      ov._burnClickBound = true;
+    }
     // reset exit state if lingering
     ov.classList.remove('exit');
     // trigger enter
@@ -309,6 +432,38 @@ function logsForUser(){
   return state.logs.filter(l => (l.user_id || 'u_camp') === uid);
 }
 
+function mostNeglectedMuscleThisWeek(){
+  try{
+    const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 0; // 0=Sun
+    const now = new Date();
+    const start = _startOfWeekLocal(now, ws);
+    const end   = new Date(start); end.setDate(start.getDate() + 7);
+
+    const allMuscles = new Set();
+    (exercisesForUser()||[]).forEach(e=>{
+      [e.primary,e.secondary,e.tertiary].forEach(m=>{ if(m) allMuscles.add(String(m)); });
+    });
+    if(!allMuscles.size) return 'Back';
+
+    const counts = new Map([...allMuscles].map(m=>[m,0]));
+    const seen = new Set(); // day+exercise dedupe inside week
+
+    for(const l of logsForUser()){
+      const key = _localYMDFromLog(l); if(!key) continue;
+      const d = new Date(key+'T12:00:00'); if(d<start || d>=end) continue;
+      const ex = state.byId && state.byId[l.exercise_id]; if(!ex) continue;
+      const dayKey = key + '|' + (ex.id||l.exercise_id);
+      if(seen.has(dayKey)) continue; seen.add(dayKey);
+      [ex.primary, ex.secondary, ex.tertiary].forEach(m=>{
+        if(m && counts.has(m)) counts.set(m, counts.get(m) + 1);
+      });
+    }
+
+    const arr = [...counts.entries()].sort((a,b)=> a[1]-b[1] || String(a[0]).localeCompare(String(b[0])));
+    return arr[0] ? arr[0][0] : 'Back';
+  }catch(_){ return 'Back'; }
+}
+
 // ==== Latest log / Suggestion ====
 function isSkip(l){ const v=String(l.skip_progress??'').toLowerCase(); return v==='1'||v==='true'||v==='yes'; }
 function latestFor(exId, side){
@@ -362,7 +517,7 @@ function deltaLineHTML(exId, side){
     const segs = [];
     if (Number(dW||0) !== 0) segs.push(_deltaSpan(dW, 'lb'));
     if (Number(dR||0) !== 0) segs.push(_deltaSpan(dR, 'Rep'));
-    return segs.join(' / ');
+    return segs.join(' ');
   };
 
   // Explicit unilateral: show only non-zero parts; hide if nothing changed
@@ -510,6 +665,14 @@ async function fetchAll(){
   state.logs      = data.logs||[];
   state.users     = (data.users && data.users.length) ? data.users : [{user_id:'u_camp',name:'Camp'},{user_id:'u_annie',name:'Annie'}];
 
+  // Ensure a default user is set on first load so suggestions render immediately
+  if (!state.userId) {
+    state.userId = (state.users && state.users[0] && state.users[0].user_id) ? state.users[0].user_id : 'u_camp';
+    try { store.set({ userId: state.userId }); } catch(_) {}
+  }
+  // Sync body theme class before rendering
+  document.body.classList.toggle('annie', state.userId === 'u_annie');
+
   // Build map only from CURRENT user's exercises to avoid cross-user names in Summary
   state.byId = Object.fromEntries(exercisesForUser().map(e=>[e.id, e]));
 
@@ -518,6 +681,8 @@ async function fetchAll(){
   renderFilters();
   renderList();
   renderSummary();
+  recomputeSuggestionsV15();
+  applySuggestionHighlightV15();
 }
 
 // Robust nav binding
@@ -660,6 +825,10 @@ function renderUserChips(){
       row.querySelectorAll('.user-chip').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
 
+      // Reset only the burn rotation buckets so the next loader shows a fresh line
+      if (!state._burnState) state._burnState = {};
+      for (const k in state._burnState) { delete state._burnState[k]; }
+
       // Pull fresh data (so manual sheet edits are reflected)
       setLoading(true);
       await refreshFromBackend();
@@ -671,6 +840,8 @@ function renderUserChips(){
       renderFilters();
       renderList();
       renderSummary();
+      recomputeSuggestionsV15();
+      applySuggestionHighlightV15();
       renderScoreMini();
     };
       renderScoreMini();

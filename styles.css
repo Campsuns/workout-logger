@@ -87,6 +87,7 @@ html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
 .nav-tabs{
   grid-column:2/3;
   display:grid; grid-template-columns:1fr 1fr; gap:12px;
+  align-items: center;
 }
 .nav-tabs button{
   height:var(--chip-h); padding:0 var(--chip-px); width:100%;
@@ -109,6 +110,7 @@ html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
   backdrop-filter:saturate(120%) blur(11px);
   -webkit-backdrop-filter:saturate(120%) blur(11px);
   display:grid; grid-template-columns:1fr 1fr; gap:12px;
+  align-items: center;
 }
 .filters::after{
   content:""; position:absolute; left:0; right:0; bottom:-24px; height:24px;
@@ -119,11 +121,25 @@ html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
 /* Selects same size as +New/Reset (not bold) */
 select, input, button, textarea{ font:inherit; }
 .filters select{
-  width:100%; height:var(--chip-h); padding:0 12px;
+  width:100%; height:var(--chip-h);
+  /* keep symmetric padding so text can be truly centered */
+  padding: 0 12px;
   background:#15161b; color:#fff; border:1px solid var(--line);
-  border-radius:var(--radius); font-size:11px; font-weight:500;
-  display:inline-flex; align-items:center;
+  border-radius:var(--radius); font-size:10px; font-weight:500;
+  display:inline-flex; align-items:center; justify-content:center;
+  text-align: center;           /* center baseline */
+  text-align-last: center;      /* center the selected item (Chromium/Edge/Safari) */
+  -moz-text-align-last: center; /* Firefox */
+
+  /* Remove native arrow so centering is exact, then add our own */
+  appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="%23a0a0a8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px center; /* place chevron inside the right padding */
+  background-size: 10px 6px;
 }
+
+.filters select::-ms-expand{ display:none; }
 button{ cursor:pointer; }
 button.ghost{
   background:#15161b; color:#e6e6e6;
@@ -247,9 +263,11 @@ menu button{ height:var(--chip-h); padding:0 var(--chip-px); border-radius:var(-
 /* MISC */
 .group-title{ color:#c7c7d0; font-size:12px; letter-spacing:.2px; margin:14px 0 8px; padding: 0 16px; }
 .subgroup{ margin-bottom:12px; }
+/* Align common controls; only nudge the requested ones by 1px */
 .filters select, .filters button, #btnAddExercise, #btnResetDone, .user-chip, .nav-tabs button, .period-tabs button{
-  display:inline-flex; align-items:center; justify-content:center; transform: translateY(-2px);
+  display:inline-flex; align-items:center; justify-content:center;
 }
+
 .stepper .ctr button, .period-tabs button, .filters button{ touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 
 
@@ -622,6 +640,7 @@ body[data-page="summary"] #summaryContent{ padding: 0; }
   gap: 10px;
   margin: 6px 0 12px;
 }
+
 .streak-dots .dot {
   width: 12px;             /* slightly smaller than before */
   height: 12px;
@@ -631,6 +650,18 @@ body[data-page="summary"] #summaryContent{ padding: 0; }
   box-sizing: border-box;
 }
 .streak-dots .dot.on { background: var(--accent); border-color: var(--accent); }
+
+/* Loading overlay dots — match summary rounded-square vibe */
+#loadingOverlay .dot,
+#loading .dot,
+.loading .dot,
+.loader .dot,
+.loading-dots .dot{
+  width: 7px;              /* keep small and consistent */
+  height: 7px;
+  border-radius: 5px !important; /* cube with rounded corners instead of circle */
+  box-sizing: border-box;
+}
 
 /* Compact stats grid */
 .summary-stats {
