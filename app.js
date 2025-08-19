@@ -2174,63 +2174,93 @@ function daysThisWeekFlags(){
 }
 
 function computeNextFromPerformance(last, ex){
-  const min = CONFIG.REP_MIN, max = CONFIG.REP_MAX;
-  let reps = Number(last.planned_reps || min);
-  let wt   = Number(last.weight_lb || ex?.default_weight || 0);
+  // Config knobs & safe fallbacks
+  const INC = Number(ex?.increment_lb || CONFIG?.DEFAULT_INC_LB || 5);
+  const REP_MIN = Number(CONFIG?.REP_MIN || 8);
+  const REP_MAX = Number(CONFIG?.REP_MAX || 12);
+  const R2X   = Number(CONFIG?.OVERPERF_RATIO_2X   || 2.0);
+  const R1P5X = Number(CONFIG?.OVERPERF_RATIO_1P5X || 1.5);
+  const RPE_VH = Number(CONFIG?.RPE_VERY_HIGH || 9.5);
+  const RPE_OK = Number(CONFIG?.RPE_OK_FOR_REP_UP || 9.0);
+  const BIG_STEPS = Number(CONFIG?.OVERPERF_BIG_INC_STEPS || 2);
+  const MED_STEPS = Number(CONFIG?.OVERPERF_MED_INC_STEPS || 1);
 
-  const frRaw = Number(last.fail_reps);
-  const hasToFailure = Number.isFinite(frRaw) && frRaw >= reps;
-  const actualMaxReps = hasToFailure ? frRaw : reps;
-  const failedAttempts = !hasToFailure && Number.isFinite(frRaw) ? Math.max(0, frRaw) : 0;
-  const rpe = Number(last.rpe_set2 || 8);
+  // Normalize inputs
+  const planned   = Math.max(1, Number(last?.planned_reps ?? REP_MIN));
+  const achieved  = Math.max(0, Number((last?.fail_reps ?? last?.planned_reps) ?? REP_MIN));
+  const rpe       = Number(last?.rpe_set2 ?? 8);
+  let nextWeight  = Math.max(0, Number(last?.weight_lb ?? ex?.default_weight ?? 0));
+  let nextReps    = planned;
 
-  const overRatio = reps > 0 ? (actualMaxReps / reps) : 1;
-  const lowRPE = rpe <= 8;
-  const veryHighRPE = rpe >= CONFIG.RPE_VERY_HIGH;
+  const ratio = achieved / planned; // over/under performance
 
-  // 1) Deload if needed
-  if (failedAttempts > 0 || veryHighRPE || reps < min) {
-    wt = Math.max(0, wt - CONFIG.DEFAULT_INC_LB);
-    reps = min;
-    return { weight: wt, reps };
+  // ===== UNDER-PERFORMANCE =====
+  if (ratio < 1.0) {
+    if (ratio <= 0.5 || rpe >= RPE_VH) {
+      // Way under or brutally hard → larger deload; reps down a touch (but not forced to 8)
+      nextWeight = Math.max(0, nextWeight - 2*INC);
+      nextReps   = Math.max(8, planned - 2);
+    } else if (ratio <= 0.9) {
+      // Moderately under → small deload; if it didn't feel awful, keep volume by nudging reps up
+      nextWeight = Math.max(0, nextWeight - 1*INC);
+      if (rpe <= 8) {
+        nextReps = Math.min(REP_MAX, planned + 1); // "weight down, reps up a touch"
+      } else {
+        nextReps = Math.max(REP_MIN, planned);
+      }
+    } else {
+      // Slight miss → hold weight; adjust reps based on RPE
+      nextReps = (rpe >= 9) ? Math.max(REP_MIN, planned - 1) : planned;
+    }
   }
 
-  // 1b) Huge over-performance: ≥2.25× planned reps with low RPE → 3 increments, reset reps
-  if (overRatio >= 2.25 && lowRPE) {
-    wt += CONFIG.DEFAULT_INC_LB * (CONFIG.OVERPERF_BIG_INC_STEPS + 1); // typically +15 lb when default inc is 5
-    reps = min;
-    return { weight: wt, reps };
+  // ===== ON TARGET (exact) =====
+  else if (ratio === 1.0) {
+    if (nextReps < REP_MAX && rpe <= RPE_OK) {
+      nextReps = Math.min(REP_MAX, planned + 1);
+    } else if (nextReps >= REP_MAX && rpe <= RPE_OK) {
+      nextReps = REP_MIN;               // cycle reps down
+      nextWeight = nextWeight + INC;    // progress via load
+    } // high RPE → hold
   }
 
-  // 2) Big jump: ≥2× planned reps
-  if (overRatio >= CONFIG.OVERPERF_RATIO_2X) {
-    wt += CONFIG.DEFAULT_INC_LB * CONFIG.OVERPERF_BIG_INC_STEPS;
-    reps = min;
-    return { weight: wt, reps };
+  // ===== OVER-PERFORMANCE =====
+  else { // ratio > 1.0
+    if (ratio >= R2X && rpe <= 8.5){
+      // Smashed it → bigger jump on both axes
+      nextWeight = nextWeight + BIG_STEPS * INC; // typically +10 lb for 5-lb INC
+      nextReps   = Math.min(REP_MAX, planned + 3);
+    } else if (ratio >= R1P5X){
+      // 1.5×–2× → weight up and reps up more than +1
+      nextWeight = nextWeight + MED_STEPS * INC; // typically +5 lb
+      nextReps   = Math.min(REP_MAX, planned + 2);
+      if (rpe <= 8 && nextReps >= REP_MAX){
+        // If capped on reps and it felt easy, take an extra load step and cycle reps
+        nextWeight = nextWeight + 1*INC;
+        nextReps   = REP_MIN;
+      }
+    } else if (ratio >= 1.25){
+      // Clear over-performance → emphasize reps first
+      nextReps = Math.min(REP_MAX, planned + 2);
+      if (rpe <= 8 && nextReps >= REP_MAX){
+        nextWeight = nextWeight + 1*INC;
+        nextReps   = REP_MIN;
+      }
+    } else {
+      // Slight over → gentle nudge
+      nextReps = Math.min(REP_MAX, planned + 1);
+      if (rpe <= 8 && nextReps >= REP_MAX){
+        nextWeight = nextWeight + 1*INC;
+        nextReps   = REP_MIN;
+      }
+    }
   }
 
-  // 3) Medium jump: ≥1.5× planned reps
-  if (overRatio >= CONFIG.OVERPERF_RATIO_1P5X) {
-    wt += CONFIG.DEFAULT_INC_LB * CONFIG.OVERPERF_MED_INC_STEPS;
-    reps = min;
-    return { weight: wt, reps };
-  }
+  // Final clamps & rounding
+  nextReps   = Math.max(REP_MIN, Math.min(REP_MAX, Math.round(nextReps)));
+  nextWeight = Math.max(0, Math.round(nextWeight));
 
-  // 4) Top of range & easy → add weight
-  if (reps >= max && lowRPE) {
-    wt += CONFIG.DEFAULT_INC_LB;
-    reps = min;
-    return { weight: wt, reps };
-  }
-
-  // 5) Increase reps within range
-  if (reps < max && rpe <= CONFIG.RPE_OK_FOR_REP_UP && failedAttempts === 0) {
-    reps = Math.min(max, reps + 1);
-    return { weight: wt, reps };
-  }
-
-  // 6) Hold
-  return { weight: wt, reps };
+  return { weight: nextWeight, reps: nextReps };
 }
 
 
