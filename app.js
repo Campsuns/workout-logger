@@ -1,4 +1,5 @@
 console.log("✅ JS file loaded and running");
+ensureModalAnimStyles();
 // ==== CONFIG – paste your Apps Script Web App URL + token ====
 // IMPORTANT: after unzipping, copy your existing API_URL and TOKEN
 // values from your current app.js into CONFIG below.
@@ -46,6 +47,24 @@ const $$ = (q, root=document)=>Array.from(root.querySelectorAll(q));
 
 // ---- Tiny loading state + dot bounce animation ----
 function ensureLoadingStyles(){
+// ---- Log modal slide animations (enter from bottom, exit upward) ----
+function ensureModalAnimStyles(){
+  let s = document.getElementById('log-modal-anim');
+  if(!s){ s = document.createElement('style'); s.id='log-modal-anim'; document.head.appendChild(s); }
+  s.textContent = `
+    @keyframes logEnter {
+      from { transform: translateY(100vh); opacity: 0; }
+      to   { transform: translateY(0);     opacity: 1; }
+    }
+    @keyframes logExit {
+      from { transform: translateY(0);     opacity: 1; }
+      to   { transform: translateY(-18vh); opacity: 0; }
+    }
+    #logModal { will-change: transform, opacity; }
+    #logModal.is-enter { animation: logEnter 380ms cubic-bezier(.22,.61,.36,1) forwards; }
+    #logModal.is-exit  { animation: logExit  320ms cubic-bezier(.4,0,.2,1)   forwards; }
+  `;
+}
   let s = document.getElementById('dot-bounce-style');
   const css = `
     @keyframes dotBounce{0%{transform:translateY(0);opacity:.7}50%{transform:translateY(-4px);opacity:1}100%{transform:translateY(0);opacity:.7}}
@@ -601,44 +620,6 @@ function suggestNext(exId, side){
   };
 }
 
-// ==== Improvements / Streaks (use ONLY current user's logs) ====
-function rankImprovements(period){
-  const logs = logsForUser().filter(l=>inPeriod(l.date||l.timestamp, period));
-  const byEx = new Map();
-  for(const l of logs){
-    const t=new Date(l.timestamp||l.date);
-    const v=e1rm(l.weight_lb||0, l.planned_reps||0);
-    const a=byEx.get(l.exercise_id)||[]; a.push({t,v}); byEx.set(l.exercise_id,a);
-  }
-  const out=[]; const start=startOfPeriod(period), now=new Date();
-  for(const [id,arr] of byEx.entries()){
-    arr.sort((a,b)=>a.t-b.t);
-    const startVal=(arr.find(x=>x.t>=start)||arr[0]||{}).v||0;
-    const endVal=(arr.filter(x=>x.t<=now).slice(-1)[0]||{}).v||0;
-    out.push({id, delta:endVal-startVal});
-  }
-  out.sort((a,b)=>b.delta-a.delta); return out;
-}
-function streaks(){
-  const allLogs = logsForUser().slice().sort((a,b)=> new Date(a.date||a.timestamp)-new Date(b.date||b.timestamp));
-  const weeks = new Map();
-  for(const l of allLogs){
-    const d=new Date(l.date||l.timestamp);
-    const weekStart = new Date(d); weekStart.setDate(d.getDate()-((d.getDay()+6)%7)); weekStart.setHours(0,0,0,0);
-    const key = weekStart.toISOString().slice(0,10);
-    weeks.set(key, (weeks.get(key)||0)+1);
-  }
-  const keys=[...weeks.keys()].sort();
-  let cur=0,best=0,perfect=0, prev=null;
-  for(const k of keys){
-    const idx = keys.indexOf(k);
-    if(prev===null || idx===prev+1) cur++; else cur=1;
-    if(weeks.get(k)>=5) perfect++;
-    if(cur>best) best=cur;
-    prev=idx;
-  }
-  return { current:cur, best, perfectWeeks:perfect };
-}
 
 // ==== API ====
 async function apiGet(params){
@@ -952,12 +933,45 @@ function renderList(){
   }
 }
 
+// --- Modal animation helpers (dialog + backdrop) ---
+function ensureModalAnimStyles(){
+  if (document.getElementById('modal-anim-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'modal-anim-styles';
+  style.textContent = `
+    @keyframes logEnter {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    @keyframes logExit {
+      from { transform: translateY(0);    opacity: 1; }
+      to   { transform: translateY(100%); opacity: 0; }
+    }
+    @keyframes backdropIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes backdropOut {
+      from { opacity: 1; }
+      to   { opacity: 0; }
+    }
+    /* Backdrop anim is keyed by a data-anim attribute on the dialog */
+    dialog[data-anim="enter"]::backdrop { animation: backdropIn .30s ease-out forwards; }
+    dialog[data-anim="exit"]::backdrop  { animation: backdropOut .30s ease-in  forwards; }
+    /* Dialog element classes for motion */
+    dialog.is-enter { animation: logEnter .30s ease-out forwards; }
+    dialog.is-exit  { animation: logExit  .30s ease-in  forwards; }
+  `;
+  document.head.appendChild(style);
+}
 // ==== Log modal ====
 let modal, stepVals, curEx;
 
 function openLog(exId){
   curEx=state.byId[exId]; if(!curEx) return;
   modal=$('#logModal');
+  ensureModalAnimStyles();
   modal.dataset.didOther='';
   delete modal.dataset.arranged; // ensure arrangeLogLayout() re-runs each open
 
@@ -1044,12 +1058,46 @@ function openLog(exId){
 
   // Run layout now; show modal
   arrangeLogLayout();
-  modal.showModal();
+  // Animated open with backdrop fade
+  try { modal.close(); } catch(_) {}
+  try { modal.showModal(); } catch(_) {}
+
+  ensureModalAnimStyles();
+  modal.classList.remove('is-exit');
+  modal.classList.add('is-enter');
+  modal.setAttribute('data-anim','enter');
+
+  const onEnterDone = () => {
+    modal.classList.remove('is-enter');
+    modal.removeEventListener('animationend', onEnterDone);
+    modal.removeAttribute('data-anim');
+  };
+  modal.addEventListener('animationend', onEnterDone);
+
   // Ensure focus lands on the active side button (prevents extra focus highlight on Left)
   setTimeout(()=>{
     const activeBtn = wrap.querySelector('button.active');
     if(activeBtn){ try { activeBtn.focus({ preventScroll: true }); } catch(_){} }
   }, 0);
+}
+// ---- Animate closing of the log modal ----
+function animateCloseModal(){
+  const m = document.getElementById('logModal');
+  if(!m) return;
+  if (!m.open) { try{ m.close(); }catch(_){ } return; }
+
+  ensureModalAnimStyles();
+  m.classList.remove('is-enter');
+  m.classList.add('is-exit');
+  m.setAttribute('data-anim','exit');
+
+  const onDone = () => {
+    m.removeEventListener('animationend', onDone);
+    try { m.close(); } catch(_){ }
+    m.classList.remove('is-exit');
+    m.removeAttribute('data-anim');
+  };
+  m.addEventListener('animationend', onDone, { once:true });
 }
 
 // Re-arrange the log modal UI (rows & buttons) and tweak styles
@@ -1630,34 +1678,6 @@ document.addEventListener('click', (e)=>{
 // Apply page on boot
 (function(){ document.body.setAttribute('data-page', state.page || 'list'); })();
 
-// Correct streaks: consecutive weeks with >=3 sessions; perfect >=5 sessions
-function streaks(){
-  const logs = logsForUser().slice().sort((a,b)=> new Date(a.date||a.timestamp)-new Date(b.date||b.timestamp));
-  const weeks = new Map(); // Monday as week start
-  for(const l of logs){
-    const d = new Date(l.date||l.timestamp);
-    const w = new Date(d); w.setDate(d.getDate()-((d.getDay()+6)%7)); w.setHours(0,0,0,0);
-    const key = w.toISOString().slice(0,10);
-    weeks.set(key, (weeks.get(key)||0)+1);
-  }
-  const keys = [...weeks.keys()].sort();
-  let cur=0, best=0, perfect=0, prevIdx=null;
-  for(let i=0;i<keys.length;i++){
-    const sessions = weeks.get(keys[i])||0;
-    const qualifies = sessions >= 3;
-    if(!qualifies){
-      if(cur>best) best=cur;
-      cur=0; prevIdx=null; // break in streak
-      continue;
-    }
-    if(prevIdx===null || i===prevIdx+1) cur += 1;
-    else cur = 1;
-    if(cur>best) best=cur;
-    if(sessions>=5) perfect += 1;
-    prevIdx=i;
-  }
-  return { current:cur, best, perfectWeeks:perfect };
-}
 
 // Ensure renderSummary maintains page dataset for CSS
 const _renderSummaryOriginal = renderSummary;
@@ -1670,102 +1690,8 @@ renderSummary = function(){
 setTimeout(()=>setPage(state.page || 'list'), 0);
 
 
-// ====== PATCH v6 — robust streak computation ======
-// Build a continuous calendar of weeks so gaps break streaks properly.
-function _weekKeyMonday(d){
-  const w = new Date(d); w.setDate(d.getDate()-((d.getDay()+6)%7)); w.setHours(0,0,0,0);
-  return w.toISOString().slice(0,10);
-}
-function _addDays(d, n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-
-function streaks(){
-  const rows = logsForUser().slice().sort((a,b)=> new Date(a.date||a.timestamp)-new Date(b.date||b.timestamp));
-  if(!rows.length) return { current:0, best:0, perfectWeeks:0 };
-  const weekly = new Map();
-  for(const l of rows){
-    const dt = new Date(l.date || l.timestamp);
-    const key = _weekKeyMonday(dt);
-    weekly.set(key, (weekly.get(key)||0) + 1);
-  }
-  // Build continuous weekly array from min week to current week
-  const firstKey = _weekKeyMonday(new Date(rows[0].date||rows[0].timestamp));
-  const lastKey  = _weekKeyMonday(new Date()); // this week
-  const weeks = [];
-  for(let d=new Date(firstKey); d<=new Date(lastKey); d=_addDays(d,7)){
-    const k = d.toISOString().slice(0,10);
-    weeks.push({ key:k, sessions: weekly.get(k)||0 });
-  }
-  // Best and current streaks for >=3 sessions
-  let best=0, cur=0;
-  for(const w of weeks){
-    if(w.sessions>=3){ cur+=1; best=Math.max(best,cur); }
-    else cur=0;
-  }
-  // Current streak counts back from the end
-  let current=0;
-  for(let i=weeks.length-1;i>=0;i--){
-    if(weeks[i].sessions>=3) current++;
-    else break;
-  }
-  // Perfect weeks: total across history (>=5)
-  const perfectWeeks = weeks.filter(w=>w.sessions>=5).length;
-  return { current, best, perfectWeeks };
-}
 
 
-// ====== PATCH v7 — streaks count UNIQUE DAYS (sessions) per week ======
-function _dateOnlyStringUTCish(val){
-  // Prefer l.date in YYYY-MM-DD; fallback to timestamp->ISO date
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-  const d = new Date(val);
-  // use UTC date part to avoid timezone off-by-one; sheet stores date-only
-  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
-}
-function _weekKeyFromDateStr(yyyy_mm_dd){
-  // Build local date at noon to avoid DST quirks, then shift to Monday
-  const d = new Date(yyyy_mm_dd+'T12:00:00');
-  const w = new Date(d); w.setDate(d.getDate()-((d.getDay()+6)%7)); w.setHours(0,0,0,0);
-  return w.toISOString().slice(0,10);
-}
-function _addDays(d, n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-
-function streaks(){
-  const rows = logsForUser().slice().sort((a,b)=> new Date(a.date||a.timestamp)-new Date(b.date||b.timestamp));
-  if(!rows.length) return { current:0, best:0, perfectWeeks:0 };
-
-  // Map: weekKey -> Set(unique dayKeys) so each workout day counts once
-  const weekToDays = new Map();
-  for(const l of rows){
-    const dayKey = _dateOnlyStringUTCish(l.date || l.timestamp);   // 'YYYY-MM-DD'
-    const weekKey = _weekKeyFromDateStr(dayKey);
-    if(!weekToDays.has(weekKey)) weekToDays.set(weekKey, new Set());
-    weekToDays.get(weekKey).add(dayKey);
-  }
-
-  // Build continuous weekly array from earliest to this week
-  const firstKey = _weekKeyFromDateStr(_dateOnlyStringUTCish(rows[0].date || rows[0].timestamp));
-  const lastKey  = _weekKeyFromDateStr(_dateOnlyStringUTCish(new Date()));
-  const weeks = [];
-  for(let d=new Date(firstKey); d<=new Date(lastKey); d=_addDays(d,7)){
-    const k = d.toISOString().slice(0,10);
-    const sessions = (weekToDays.get(k) || new Set()).size; // UNIQUE DAYS
-    weeks.push({ key:k, sessions });
-  }
-
-  // Compute best and current streaks for >=3 sessions/week
-  let best=0, cur=0;
-  for(const w of weeks){
-    if(w.sessions>=3){ cur+=1; best=Math.max(best,cur); }
-    else cur=0;
-  }
-  let current=0;
-  for(let i=weeks.length-1;i>=0;i--){
-    if(weeks[i].sessions>=3) current++;
-    else break;
-  }
-  const perfectWeeks = weeks.filter(w=>w.sessions>=5).length;
-  return { current, best, perfectWeeks };
-}
 
 
 // ====== PATCH v8 — Most Improved uses baseline BEFORE the period and effective reps ======
@@ -1920,12 +1846,12 @@ async function submitLog(skip){
 
 
 
-// ====== PATCH v10 — Cancel closes modal ======
+// ====== PATCH v10 — Cancel closes modal (animated) ======
 document.addEventListener('click', (e)=>{
   const b=e.target.closest('#btnCancel');
   if(!b) return;
   e.preventDefault();
-  try { document.getElementById('logModal').close(); } catch(_){}
+  animateCloseModal();
 });
 
 
@@ -2024,7 +1950,7 @@ async function submitLog(skip){
       skip_progress: skip ? 1 : '',
       notes: $('#logNotes').value||''
     };
-    try { if(modalEl) modalEl.close(); } catch(_){}
+    animateCloseModal();
     apiPost('addLog', payload)
       .then(res => {
         if(res && !res.error){
@@ -2052,7 +1978,7 @@ async function submitLog(skip){
       skip_progress: skip ? 1 : '',
       notes: $('#logNotes').value||''
     };
-    try { if(modalEl) modalEl.close(); } catch(_){}
+    animateCloseModal();
     apiPost('addLog', payload)
       .then(res => {
         if(res && !res.error){
@@ -2112,27 +2038,46 @@ function _dateOnlyLocal(val){
   return `${y}-${m}-${day}`;
 }
 
-// Helper: Derive local YYYY-MM-DD for a log, preferring timestamp
+// Helper: Derive local YYYY-MM-DD for a log, robust to multiple date formats
 function _localYMDFromLog(l){
-  // Prefer timestamp (ISO string) to avoid sheet timezone quirks
-  if (l && l.timestamp) {
-    const d = new Date(l.timestamp);
+  // Return local YYYY-MM-DD for mixed date inputs.
+  // Prefer `timestamp` if present; otherwise use `date`.
+  const val = (l && (l.timestamp || l.date)) || null;
+  if (!val) return '';
+
+  const toYMD = (d)=>{
+    if (!(d instanceof Date) || isNaN(d)) return '';
     const y = d.getFullYear();
     const m = String(d.getMonth()+1).padStart(2,'0');
     const day = String(d.getDate()).padStart(2,'0');
-    return `${y}-${m}-${day}`; // local Y-M-D from timestamp
+    return `${y}-${m}-${day}`;
+  };
+
+  // 1) ISO timestamp like 2025-08-10T12:00:00Z or with offset
+  if (typeof val === 'string' && /T\d{2}:\d{2}:\d{2}/.test(val)){
+    const d = new Date(val); // browser handles TZ correctly
+    return toYMD(d);
   }
-  // Fallback to `date` (YYYY-MM-DD). Parse as LOCAL date by components to avoid UTC parsing.
-  if (l && typeof l.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.date)){
-    const [y,m,day] = l.date.split('-').map(Number);
-    const d = new Date(y, m-1, day, 12, 0, 0); // local noon to dodge DST edges
-    const yy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const dd = String(d.getDate()).padStart(2,'0');
-    return `${yy}-${mm}-${dd}`;
+
+  // 2) `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS` (note: iOS Safari fails the latter via `new Date()`)
+  if (typeof val === 'string' && /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?$/.test(val)){
+    const m = val.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?$/);
+    const y = +m[1], mo = +m[2], d = +m[3];
+    const hh = +(m[4]||12), mi = +(m[5]||0), ss = +(m[6]||0);
+    return toYMD(new Date(y, mo-1, d, hh, mi, ss)); // LOCAL, avoids iOS parsing bugs
   }
-  // Last resort: let the old helper try
-  return _dateOnlyLocal(l?.date || l?.timestamp || new Date());
+
+  // 3) `M/D/YYYY HH:MM:SS` or `M/D/YYYY` (US-style, variable zero padding)
+  if (typeof val === 'string' && /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/.test(val)){
+    const m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
+    const mo = +m[1], d = +m[2], y = +m[3];
+    const hh = +(m[4]||12), mi = +(m[5]||0), ss = +(m[6]||0);
+    return toYMD(new Date(y, mo-1, d, hh, mi, ss)); // LOCAL
+  }
+
+  // 4) Last resort: let Date try; then normalize to local YMD
+  const d = new Date(val);
+  return toYMD(d);
 }
 
 function daysThisWeekFlags(){
@@ -2169,6 +2114,143 @@ function daysThisWeekFlags(){
 
   const count = flags.reduce((a,b)=> a + (b ? 1 : 0), 0);
   return { count, flags };
+}
+
+// === Summary helpers ===
+function _isoDayLocal(val){
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  const d = new Date(val);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function _periodWindow(period){
+  const start = startOfPeriod(period||'week');
+  const end   = new Date(start); end.setHours(0,0,0,0);
+  if ((period||'week')==='week') end.setDate(end.getDate()+7);
+  else if ((period||'month')==='month') end.setMonth(end.getMonth()+1);
+  else end.setFullYear(end.getFullYear()+1);
+  return {start, end};
+}
+// === Summary metrics v2 — unified date logic (single source of truth) ===
+const WEEK_START = Number(CONFIG && Number.isFinite(CONFIG.WEEK_START) ? CONFIG.WEEK_START : 0); // 0=Sun default
+
+function ymdFromLogLocal(l){
+  // Reuse robust helper already in file
+  return _localYMDFromLog(l);
+}
+function periodWindowLocal(period, ref = new Date()){
+  const p = (period||'week').toLowerCase();
+  const startRef = new Date(ref); startRef.setHours(0,0,0,0);
+  if (p==='week'){
+    const s = _startOfWeekLocal(startRef, WEEK_START);
+    const e = new Date(s); e.setDate(e.getDate()+7);
+    return { start: s, end: e };
+  } else if (p==='month'){
+    const s = new Date(startRef.getFullYear(), startRef.getMonth(), 1, 0,0,0,0);
+    const e = new Date(startRef.getFullYear(), startRef.getMonth()+1, 1, 0,0,0,0);
+    return { start: s, end: e };
+  } else { // 'year'
+    const s = new Date(startRef.getFullYear(), 0, 1, 0,0,0,0);
+    const e = new Date(startRef.getFullYear()+1, 0, 1, 0,0,0,0);
+    return { start: s, end: e };
+  }
+}
+function sessionAndWorkoutCounts(period, userId){
+  const {start, end} = periodWindowLocal(period);
+  const days = new Set();
+  let workouts = 0;
+  for (const l of (state.logs||[])){
+    if ((l.user_id||'u_camp') !== userId) continue;
+    const ymd = ymdFromLogLocal(l); if (!ymd) continue;
+    const dt = new Date(ymd+'T12:00:00');
+    if (dt < start || dt >= end) continue;
+    workouts += 1; // each log row counts as one workout entry
+    days.add(ymd); // unique training days
+  }
+  return { sessions: days.size, workouts };
+}
+function weekKeyFromYMD(ymd){
+  const d = new Date(ymd+'T12:00:00');
+  const w0 = _startOfWeekLocal(d, WEEK_START);
+  return w0.toISOString().slice(0,10);
+  }
+function streakForUser(userId){
+  const rows = (state.logs||[]).filter(l => (l.user_id||'u_camp')===userId);
+  if (!rows.length) return { current:0, best:0, perfectWeeks:0, thisWeekSessions:0 };
+
+  // week -> Set(unique days)
+  const map = new Map();
+  for (const l of rows){
+    const ymd = ymdFromLogLocal(l); if (!ymd) continue;
+    const wk = weekKeyFromYMD(ymd);
+    if (!map.has(wk)) map.set(wk, new Set());
+    map.get(wk).add(ymd);
+  }
+
+  // Continuous list of weeks from first to this week
+  const keys = [...map.keys()].sort();
+  const first = _startOfWeekLocal(new Date(keys[0]+'T00:00:00'), WEEK_START);
+  const thisWeek = _startOfWeekLocal(new Date(), WEEK_START);
+  const weeks = [];
+  for (let d=new Date(first); d<=thisWeek; d.setDate(d.getDate()+7)){
+    const k = d.toISOString().slice(0,10);
+    weeks.push({ k, sessions: (map.get(k)?.size||0) });
+  }
+
+  // Best streak across full history (>=3 sessions)
+  let best=0, run=0;
+  for (const w of weeks){
+    if (w.sessions>=3){ run++; if (run>best) best=run; }
+    else run=0;
+  }
+
+  // Current streak that IGNORES the in‑progress week at the end if it's <3
+  let lastIdx = weeks.length - 1;
+  if (lastIdx >= 0 && weeks[lastIdx].sessions < 3) lastIdx--; // drop current week if not complete
+  let current = 0;
+  for (let i=lastIdx; i>=0; i--){
+    if (weeks[i].sessions >= 3) current++;
+    else break;
+  }
+
+  const thisWeekSessions = weeks.length ? weeks[weeks.length-1].sessions : 0;
+  const perfectWeeks = weeks.filter(w=>w.sessions>=5).length;
+  return { current, best, perfectWeeks, thisWeekSessions };
+}
+function coupleStreak(){
+  const users = ['u_camp','u_annie'];
+  const weekMap = new Map(); // week -> {uid: count}
+  const seen = new Set();    // dedupe per user per day
+  for (const l of (state.logs||[])){
+    const uid = (l.user_id||'u_camp'); if (!users.includes(uid)) continue;
+    const ymd = ymdFromLogLocal(l); if (!ymd) continue;
+    const dedupeKey = uid+'|'+ymd; if (seen.has(dedupeKey)) continue; seen.add(dedupeKey);
+    const wk = weekKeyFromYMD(ymd);
+    if (!weekMap.has(wk)) weekMap.set(wk, { u_camp:0, u_annie:0 });
+    const rec = weekMap.get(wk); rec[uid] += 1;
+  }
+  const keys = [...weekMap.keys()].sort();
+  if (!keys.length) return 0;
+  const first = _startOfWeekLocal(new Date(keys[0]+'T00:00:00'), WEEK_START);
+  const thisWeek = _startOfWeekLocal(new Date(), WEEK_START);
+  const list = [];
+  for (let d=new Date(first); d<=thisWeek; d.setDate(d.getDate()+7)){
+    const k = d.toISOString().slice(0,10);
+    const rec = weekMap.get(k) || { u_camp:0, u_annie:0 };
+    list.push(rec.u_camp>=3 && rec.u_annie>=3);
+  }
+  let cur=0; for (let i=list.length-1;i>=0;i--){ if(list[i]) cur++; else break; }
+  return cur;
+}
+function uniqueDaysInPeriod(period, userId){
+  const r = sessionAndWorkoutCounts(period, userId);
+  return r.sessions;
+}
+function totalLogsInPeriod(period, userId){
+  const r = sessionAndWorkoutCounts(period, userId);
+  return r.workouts;
 }
 
 function computeNextFromPerformance(last, ex){
@@ -2354,28 +2436,80 @@ renderSummary = function(){
   const wrap = document.getElementById('summaryContent');
   if (!wrap) return;
 
-  // Fresh scaffold with placeholders — layout only
+  const uid   = state.userId || 'u_camp';
+  const per   = state.period || 'week';
+  const st    = (function(){ try{ return streakForUser(uid); }catch(_){ return {current:0,best:0,perfectWeeks:0,thisWeekSessions:0}; } })();
+  const consWeeks   = st.current;
+  const coupleWeeks = (function(){ try{ return coupleStreak(); }catch(_){ return 0; } })();
+  const _counts     = (function(){ try{ return sessionAndWorkoutCounts(per, uid); }catch(_){ return {sessions:0,workouts:0}; } })();
+  const sessionCnt  = _counts.sessions;
+  const workoutCnt  = _counts.workouts;
+  const thisWeekSessions = st.thisWeekSessions || 0;
+
+  // Build week dots for "This Week"
+  const weekFlags = (function(){ try{ return daysThisWeekFlags(); }catch(_){ return {count:0, flags:new Array(7).fill(false)}; } })();
+  const dotsHTML = weekFlags.flags.map(f =>
+    `<span class="wk" style="width:11px;height:11px;border-radius:4px;display:inline-block;border:1px solid var(--accent);${f?'background:var(--accent);':''}"></span>`
+  ).join('<span style="width:3px;display:inline-block;"></span>');
+
+  // Fresh scaffold
   wrap.innerHTML = `
     <div class="summary-grid">
-      
-      <!-- Row 1: 4 Boxes Group (left) -->
+      <!-- Row 1: Streaks (quad) + Metrics Box -->
       <div>
-        <div class="summary-box-header">4 Boxes Group</div>
+        <div class="summary-box-header">Streaks</div>
         <div class="summary-card quad">
-          <div class="quad"><div class="label">Metric A</div><div class="value">42</div></div>
-          <div class="quad"><div class="label">Metric B</div><div class="value">7</div></div>
-          <div class="quad"><div class="label">Metric C</div><div class="value">19</div></div>
-          <div class="quad"><div class="label">Metric D</div><div class="value">3</div></div>
+          <div class="quad"><div class="label">Current Streak</div><div class="value" data-metric="cons">${consWeeks}</div></div>
+          <div class="quad"><div class="label">Dual Streak</div><div class="value" data-metric="couple">${coupleWeeks}</div></div>
+          <div class="quad"><div class="label">Longest Streak</div><div class="value" data-metric="best">${st.best}</div></div>
+          <div class="quad"><div class="label">Perfect Weeks</div><div class="value" data-metric="perfect">${st.perfectWeeks}</div></div>
         </div>
       </div>
 
-      <!-- Row 1: Default Box (right) -->
       <div>
-        <div class="summary-box-header">Default Box</div>
+        <div class="summary-box-header">Metrics</div>
         <div class="summary-card default">
           <div class="summary-stats">
-            <div>Placeholder content for a text-heavy box.</div>
-            <div>All text here is 10px.</div>
+            <!-- Chunk: This Week -->
+            <div class="chunk">
+              <div class="chunk-title"><strong>This Week</strong></div>
+              <!-- Use padding-top instead of margin-top to avoid collapsing with preceding title -->
+              <div class="week-cubes" style="margin-top:0; padding-top:8px; display:flex; gap:1px; align-items:center;">
+                ${dotsHTML}
+              </div>
+            </div>
+
+            <!-- Chunk: Totals (no gap between lines) -->
+            <div class="chunk" style="margin-top:1px;">
+              <div class="chunk-title"><strong>Total</strong></div>
+              <div class="kv-lines" style="margin-top:3px; display:grid; row-gap:0;">
+                <div class="line" style="margin:0;padding:0;">Sessions: <span class="accent" style="color:var(--accent)">${sessionCnt}</span></div>
+                <div class="line" style="margin:0;padding:0;">Workouts: <span class="accent" style="color:var(--accent)">${workoutCnt}</span></div>
+              </div>
+            </div>
+
+            <!-- Chunk: Personal Records (date right-aligned) -->
+            <div class="chunk" style="margin-top:6px;">
+              <div class="chunk-title"><strong>Personal Records</strong></div>
+              <div class="pr-list" style="margin-top:3px; display:grid; row-gap:1px;">
+                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
+                  <span class="pr-label">Pull-up: <span class="accent" style="color:var(--accent)">—</span></span>
+                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
+                </div>
+                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
+                  <span class="pr-label">Bench Press: <span class="accent" style="color:var(--accent)">— lb</span></span>
+                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
+                </div>
+                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
+                  <span class="pr-label">Deadlift: <span class="accent" style="color:var(--accent)">— lb</span></span>
+                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
+                </div>
+                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
+                  <span class="pr-label">Squat: <span class="accent" style="color:var(--accent)">— lb</span></span>
+                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2385,7 +2519,7 @@ renderSummary = function(){
         <div class="summary-box-header">Wide Box</div>
         <div class="summary-card wide">
           <div class="summary-stats">
-            <div>Wide placeholder content that spans across both columns.</div>
+            <div>Wide placeholder content that spans both columns.</div>
           </div>
         </div>
       </div>
@@ -2393,37 +2527,47 @@ renderSummary = function(){
       <!-- Row 3: Two Default Boxes -->
       <div>
         <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default">
-          <div class="summary-stats">
-            <div>Placeholder box (left) with 10px text.</div>
-          </div>
-        </div>
+        <div class="summary-card default"><div class="summary-stats"><div>Left default box</div></div></div>
       </div>
       <div>
         <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default">
-          <div class="summary-stats">
-            <div>Placeholder box (right) with 10px text.</div>
-          </div>
-        </div>
+        <div class="summary-card default"><div class="summary-stats"><div>Right default box</div></div></div>
       </div>
 
       <!-- Row 4: Wide Box (full width) -->
       <div class="row-wide">
         <div class="summary-box-header">Wide Box</div>
-        <div class="summary-card wide">
-          <div class="summary-stats">
-            <div>Another wide placeholder spanning both columns.</div>
-          </div>
-        </div>
+        <div class="summary-card wide"><div class="summary-stats"><div>Another wide box</div></div></div>
       </div>
-
     </div>`;
 
-  // Ensure the full-width rows span across both grid columns without touching global CSS
-  wrap.querySelectorAll('.row-wide').forEach(node=>{
-    try{ node.style.gridColumn = '1 / -1'; } catch(_) {}
-  });
+  // Enforce breathing room above "This Week" cubes (avoid margin-collapsing)
+  try {
+    const wc = wrap.querySelector('.week-cubes');
+    if (wc) {
+      wc.style.setProperty('margin-top','0','important');
+      wc.style.setProperty('padding-top','8px','important');
+    }
+  } catch(_) {}
+
+  // Flag "streak at risk" (keep number, tint yellow) if this week < 3 sessions
+  try {
+    const consEl = wrap.querySelector('.value[data-metric="cons"]');
+    if (consEl) {
+      if (thisWeekSessions < 3 && consWeeks > 0) {
+        consEl.style.color = 'var(--warn, #F6C453)'; // yellow-ish; falls back if --warn is not defined
+        consEl.setAttribute('title', 'Streak at risk — ' + thisWeekSessions + '/3 this week');
+        consEl.dataset.pending = '1';
+      } else {
+        consEl.style.removeProperty('color');
+        consEl.removeAttribute('data-pending');
+        consEl.removeAttribute('title');
+      }
+    }
+  } catch (_) {}
+
+  // Ensure full-width rows span both columns
+  wrap.querySelectorAll('.row-wide').forEach(node=>{ try{ node.style.gridColumn = '1 / -1'; } catch(_) {} });
 };
 
     
