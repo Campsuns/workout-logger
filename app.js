@@ -1,5 +1,35 @@
 console.log("✅ JS file loaded and running");
 ensureModalAnimStyles();
+// === Boot loader overlay (first paint) ===
+function ensureBootLoader(){
+  try{
+    if (document.getElementById('boot-loader')) return;
+    const css = document.createElement('style');
+    css.id = 'boot-loader-css';
+    css.textContent = `
+      #boot-loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+        background:rgba(10,12,14,.92);z-index:9999;transition:opacity .25s ease;}
+      #boot-loader.hidden{opacity:0;pointer-events:none}
+      .boot-dots{display:flex;gap:7px}
+      .boot-dot{width:10px;height:10px;border-radius:4px;background:var(--accent);opacity:.85;
+        animation:bd 900ms infinite ease-in-out}
+      .boot-dot:nth-child(2){animation-delay:.1s}
+      .boot-dot:nth-child(3){animation-delay:.2s}
+      @keyframes bd{0%,80%,100%{transform:scale(.6)}40%{transform:scale(1)}}
+    `;
+    document.head.appendChild(css);
+    const overlay = document.createElement('div');
+    overlay.id = 'boot-loader';
+    overlay.innerHTML = '<div class="boot-dots"><div class="boot-dot"></div><div class="boot-dot"></div><div class="boot-dot"></div></div>';
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', ()=> document.body.appendChild(overlay));
+    } else {
+      document.body.appendChild(overlay);
+    }
+  }catch(_){}
+}
+function showBootLoader(){ try{ ensureBootLoader(); const el=document.getElementById('boot-loader'); if(el) el.classList.remove('hidden'); }catch(_){}} 
+function hideBootLoader(){ try{ const el=document.getElementById('boot-loader'); if(el){ el.classList.add('hidden'); setTimeout(()=>{ try{ el.remove(); }catch(_){ } }, 260); } }catch(_){} }
 // ==== CONFIG – paste your Apps Script Web App URL + token ====
 // IMPORTANT: after unzipping, copy your existing API_URL and TOKEN
 // values from your current app.js into CONFIG below.
@@ -77,10 +107,11 @@ function ensureModalAnimStyles(){
 
     /* Full-screen wipe overlay while switching profiles */
     #switchOverlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9999; background: var(--accent); will-change: transform, opacity; flex-direction: column; }
-    #switchOverlay .wipe{ display:flex; gap:6px; }
+    #switchOverlay .wipe{ display:flex; gap:2px; }
     #switchOverlay .dot{ width:10px; height:10px; border-radius:4px !important; border:2px solid #fff; background:transparent; box-shadow:0 0 0 0 rgba(0,0,0,0.12); }
     #switchOverlay .burn-top,
     #switchOverlay .burn-bottom{
+      font-size: calc(80%); /* +3px from inherited size */
       width: 100%;
       max-width: 65%;
       margin-left: auto; margin-right: auto;
@@ -91,7 +122,7 @@ function ensureModalAnimStyles(){
     #switchOverlay .burn-top{
       font-weight: 500;          /* bold */
       font-style: normal;        /* not italic */
-      font-size: calc(100% + 2px); /* +3px from inherited size */
+      font-size: calc(80% + 2px); /* +3px from inherited size */
       opacity: .95;
       margin: 5px 0 10px;         /* scoot up (smaller top), tight gap to dots */
     }
@@ -147,7 +178,7 @@ const BURN_LINES = [
   { top:"rebuilding routine…", bottom:"{muscle} needs bricks, not wishes. lay a set." },
   { top:"tuning form…", bottom:"{muscle} form’s on mute. turn it up with reps." },
   { top:"measuring effort…", bottom:"{muscle} effort stuck on airplane mode. toggle beast mode." },
-  { top:"fetching PRs…", bottom:"{muscle} says ‘pr? first time hearing it.’ introduce yourselves." },
+  { top:"fetching prs…", bottom:"{muscle} says ‘pr? first time hearing it.’ introduce yourselves." },
   { top:"compiling progress…", bottom:"{muscle} won’t compile without sets. ship a workout." },
   { top:"hydrating data…", bottom:"{muscle} is thirsty—for volume. sip later, lift now." },
   { top:"scanning recovery…", bottom:"{muscle} recovered… from doing nothing. time to work." },
@@ -640,6 +671,8 @@ async function apiPost(action, payload){
 
 // ==== Fetch & boot ====
 async function fetchAll(){
+  // Show boot overlay only on the first fetch during initial load
+  if (!state._bootShown) { state._bootShown = true; try { showBootLoader(); } catch(_){} }
   const data = await apiGet({action:'getAll'});
   if(data.error){ console.error(data.error); toast('API error: '+data.error); return; }
   state.exercises = data.exercises||[];
@@ -665,7 +698,11 @@ async function fetchAll(){
   renderSummary();
   recomputeSuggestionsV15();
   applySuggestionHighlightV15();
+  // Hide boot overlay once first render is complete
+  try { hideBootLoader(); } catch(_) {}
 }
+
+
 
 // Robust nav binding
 function bindNav(){
@@ -1548,7 +1585,7 @@ async function saveExercise(){
 }
 
 // ==== Summary (mirrored heat map) ====
-const MUSCLE_LIST = ['Chest','Back','Trapezius','Shoulders','Front Delt','Side Delt','Rear Delt','Biceps','Triceps','Forearms','Abs','Glutes','Quads','Hamstrings','Calves'];
+const MUSCLE_LIST = ['Chest','Back','Trapezius','Shoulders','Front Delt','Rear Delt','Biceps','Triceps','Forearms','Abs','Glutes','Quads','Hamstrings','Calves'];
 const MUSCLE_POINTS = { primary:3, secondary:2, tertiary:1 };
 function musclePercents(period){
   const logs = logsForUser().filter(l=>inPeriod(l.date||l.timestamp, period));
@@ -1572,6 +1609,550 @@ function heat(pct){
   const alpha = 0.12 + 0.88 * (pct/100);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
+
+// ==== Heatmap (front/back) helpers ====
+function ensureHeatmapStyles(){
+  if (document.getElementById('heatmap-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'heatmap-styles';
+  s.textContent = `
+    .hm-wrap{ width:100%; display:flex; align-items:center; justify-content:center; }
+    .hm-svg{ width:100%; height:auto; max-width:468px; }
+    .hm-body{ fill:#15191e; }
+    .hm-outline{ fill:none; stroke:rgba(255,255,255,.10); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+    .hm-muscle{ fill: var(--accent); fill-opacity:.18; stroke: rgba(255,255,255,.18); stroke-width:.75; vector-effect: non-scaling-stroke; }
+    .hm-muscle.t1{ fill: var(--accent); fill-opacity:.90; }
+    .hm-muscle.t2{ fill: var(--accent); fill-opacity:.55; }
+    .hm-muscle.t3{ fill: var(--accent); fill-opacity:.30; }
+    .hm-muscle.dim{ fill: var(--accent); fill-opacity:.10; }
+    .hm-muscle.warn{ fill: var(--warn, #F6C453) !important; fill-opacity:.15 !important; }
+    .hm-muscle.danger{ fill: var(--danger, #FF6B6B) !important; fill-opacity:.15 !important; }
+  `;
+  document.head.appendChild(s);
+}
+
+// Convert logs → per-muscle score with alias normalization
+function computeMuscleFocus(period){
+  const score = new Map();
+
+  // NOTE: Chest undercount sanity fix via robust aliasing (pec/pectorals/upper/lower all → Chest).
+
+  // Map common labels to the canonical atlas keys used in the ID maps
+  // Make aliasing case‑insensitive and tolerant of hyphens/slashes/variants.
+  const ALIAS_RAW = {
+    // Chest family
+    'chest':'Chest','pec':'Chest','pecs':'Chest','pectoral':'Chest','pectorals':'Chest',
+    'pectoralis major':'Chest','pectoralis minor':'Chest','upper chest':'Chest','lower chest':'Chest',
+    // Delts family
+    'rear delt':'Back Delt','rear delts':'Back Delt','back delt':'Back Delt','back delts':'Back Delt',
+    'front delt':'Front Delt','front delts':'Front Delt',
+
+    'delts':'Shoulders','delt':'Shoulders','shoulder':'Shoulders','shoulders':'Shoulders',
+    // Back family
+    'upper back':'Upper Back','mid back':'Upper Back','lats':'Upper Back','latissimus dorsi':'Upper Back','back':'Upper Back',
+    // Traps
+    'trapezius':'Traps','traps':'Traps',
+    // Arms
+    'bicep':'Biceps','biceps':'Biceps','tricep':'Triceps','triceps':'Triceps','forearm':'Forearms','forearms':'Forearms',
+    // Core
+    'abs':'Core','abdominals':'Core','core':'Core',
+    // Glutes/legs
+    'gluteus':'Glutes','gluteus maximus':'Glutes','glutes':'Glutes',
+    'quadriceps':'Quads','quads':'Quads',
+    'hamstring':'Hamstrings','hamstrings':'Hamstrings',
+    'calf':'Calves','calves':'Calves',
+    // Lower back
+    'lower back':'Lower Back'
+  };
+  const ALIAS = new Map(Object.entries(ALIAS_RAW).map(([k,v]) => [k.toLowerCase(), v]));
+
+  function _canon(name){
+    if(!name) return '';
+    // normalize: trim, lower, collapse whitespace, swap hyphens/slashes with spaces
+    let key = String(name).replace(/[\/\-]/g,' ').toLowerCase().trim().replace(/\s+/g,' ');
+    return ALIAS.get(key) || name; // fall back to original if not aliased
+  }
+
+  function addNorm(name, pts){
+    const canon = _canon(name);
+    if(!canon) return;
+
+    // If a generic "Shoulders" label is used, split credit across the three heads
+    if (String(canon).toLowerCase() === 'shoulders'){
+      ['Front Delt','Back Delt'].forEach(k=>{
+        score.set(k, (score.get(k)||0) + pts/3);
+      });
+      return;
+    }
+    score.set(canon, (score.get(canon)||0) + pts);
+  }
+
+  const logs = logsForUser().filter(l => inPeriod(l.date||l.timestamp, period));
+  for(const l of logs){
+    const ex = state.byId[l.exercise_id];
+    if(!ex) continue;
+    addNorm(ex.primary,   3);
+    addNorm(ex.secondary, 2);
+    addNorm(ex.tertiary,  1);
+  }
+  // Debug helper: window.debugMuscles() logs the top muscles and totals
+  if (!window.debugMuscles) {
+    window.debugMuscles = function(){
+      const arr = [...score.entries()].sort((a,b)=>b[1]-a[1]);
+      console.table(arr.slice(0,15).map(([m,v])=>({muscle:m, points:+v.toFixed(2)})));
+      return arr;
+    };
+  }
+  return score; // Map<Muscle, number>
+}
+
+/* ===== Heatmap tiering v2: 6 buckets (t1..t6) shared ===== */
+function _quantilePicker(values){
+  const vals = values.filter(v => Number(v) > 0).sort((a,b) => a-b);
+  if (!vals.length) {
+    const f = () => 't6';
+    f.thresholds = { T1:0,T2:0,T3:0,T4:0,T5:0 };
+    return f;
+  }
+  const pick = (p) => vals[Math.max(0, Math.min(vals.length-1, Math.floor(p*(vals.length-1))))];
+  const T1 = pick(0.85), T2 = pick(0.65), T3 = pick(0.45), T4 = pick(0.25), T5 = pick(0.10);
+  const f = (v) => {
+    const x = Number(v)||0;
+    if (x >= T1) return 't1';
+    if (x >= T2) return 't2';
+    if (x >= T3) return 't3';
+    if (x >= T4) return 't4';
+    if (x >= T5) return 't5';
+    return 't6';
+  };
+  f.thresholds = { T1,T2,T3,T4,T5 };
+  return f;
+}
+function _tierMap6(scoreMap){
+  const qp = _quantilePicker([...scoreMap.values()]);
+  const out = {};
+  for (const [name, val] of scoreMap.entries()){
+    out[name] = qp(val);
+  }
+  return out;
+}
+
+// Rank → tier assignment {name -> class}
+function rankToTiers(score){
+  // Build 6-tier map (t1..t6) by quantiles; stable fallback to t6 if no data
+  try{
+    return _tierMap6(score);
+  }catch(_){
+    const out={}; score.forEach((_,k)=> out[k]='t6'); return out;
+  }
+}
+
+// Apply heat to a given SVG root using id map
+function applyHeatToSvg(svgRoot, score, idMap){
+  if(!svgRoot) return;
+  const tierMap = rankToTiers(score);
+  // Dim all muscles first
+  svgRoot.querySelectorAll('.hm-muscle').forEach(n=>n.classList.add('dim'));
+  for(const [muscle, svgId] of Object.entries(idMap)){
+    const el = svgRoot.getElementById ? svgRoot.getElementById(svgId) : svgRoot.querySelector('#'+svgId);
+    if(!el) continue;
+
+    // Clear previous state
+    el.classList.remove('dim','t1','t2','t3','t4','t5','t6','warn','danger');
+
+    // Base tier by rank (t1..t6)
+    const tier = tierMap[muscle] || 't6';
+    el.classList.add(tier);
+
+    // Absolute score-based warnings override color via CSS hooks:
+// danger: ≤2 points, warn: ≤9 points (and not danger)
+const raw = Number((score && score.get) ? score.get(muscle) : 0) || 0;
+if (raw <= 2) {
+  el.classList.add('danger');
+} else if (raw <= 9) {
+  el.classList.add('warn');
+}
+
+    // Ensure no stray inline opacity fights CSS tiers
+    el.style.opacity = '';
+  }
+}
+
+function heatmapSVG(which){
+  const isF = which==='front';
+  const vb = '0 0 200 400';
+  return `
+    <div class="hm-wrap">
+      <svg class="hm-svg" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-label="${which} muscle heatmap">
+        <!-- simplified body -->
+        <g class="hm-body">
+          <path class="hm-outline" d="
+            M100,20
+            c 18,0 28,12 32,28
+            c 6,24 22,36 22,62
+            v 210
+            c 0,20 -14,38 -54,38
+            c -40,0 -54,-18 -54,-38
+            v -210
+            c 0,-26 16,-38 22,-62
+            c 4,-16 14,-28 32,-28
+            z" />
+          <ellipse cx="100" cy="40" rx="18" ry="20" class="hm-outline"/>
+        </g>
+
+        <!-- CHEST / UPPER BACK -->
+        ${isF
+          ? '<g id="mf-chest" class="hm-muscle"><path d="M60 96 q40 -12 80 0 v20 q-40 12 -80 0 z"/></g>'
+          : '<g id="mb-upper-back" class="hm-muscle"><path d="M62 100 q38 -14 76 0 v22 q-38 12 -76 0 z"/></g>'}
+
+        <!-- TRAPS -->
+        ${isF
+          ? '<g id="mf-traps" class="hm-muscle"><path d="M85 70 q8 -10 15 0 v10 q-7 6 -15 0 z"/></g>'
+          : '<g id="mb-traps" class="hm-muscle"><path d="M82 72 q9 -10 18 0 v10 q-9 6 -18 0 z"/></g>'}
+
+        <!-- DELTS -->
+        ${isF
+          ? '<g id="mf-front-delt" class="hm-muscle"><ellipse cx="36" cy="110" rx="14" ry="12"/><ellipse cx="164" cy="110" rx="14" ry="12"/></g>'
+          : '<g id="mb-back-delt" class="hm-muscle"><ellipse cx="36" cy="118" rx="14" ry="12"/><ellipse cx="164" cy="118" rx="14" ry="12"/></g>'}
+
+        <!-- ARMS -->
+        ${isF
+          ? '<g id="mf-biceps" class="hm-muscle"><rect x="24" y="128" width="20" height="46" rx="10"/><rect x="156" y="128" width="20" height="46" rx="10"/></g>'
+          : '<g id="mb-triceps" class="hm-muscle"><rect x="24" y="128" width="20" height="46" rx="10"/><rect x="156" y="128" width="20" height="46" rx="10"/></g>'}
+
+        <!-- FOREARMS -->
+        ${isF
+          ? '<g id="mf-forearms" class="hm-muscle"><rect x="20" y="178" width="24" height="48" rx="10"/><rect x="156" y="178" width="24" height="48" rx="10"/></g>'
+          : '<g id="mb-forearms" class="hm-muscle"><rect x="20" y="178" width="24" height="48" rx="10"/><rect x="156" y="178" width="24" height="48" rx="10"/></g>'}
+
+        <!-- CORE / LOWER BACK -->
+        ${isF
+          ? '<g id="mf-core" class="hm-muscle"><rect x="78" y="128" width="44" height="70" rx="12"/></g>'
+          : '<g id="mb-lower-back" class="hm-muscle"><rect x="80" y="134" width="40" height="58" rx="12"/></g>'}
+
+        <!-- GLUTES -->
+        ${isF
+          ? '<g id="mf-glutes" class="hm-muscle"><path d="M76 208 q24 -10 48 0 v34 q-24 12 -48 0 z"/></g>'
+          : '<g id="mb-glutes" class="hm-muscle"><path d="M74 208 q26 -10 52 0 v36 q-26 12 -52 0 z"/></g>'}
+
+        <!-- QUADS / HAMSTRINGS -->
+        ${isF
+          ? '<g id="mf-quads" class="hm-muscle"><rect x="64" y="246" width="26" height="92" rx="12"/><rect x="110" y="246" width="26" height="92" rx="12"/></g>'
+          : '<g id="mb-hamstrings" class="hm-muscle"><rect x="64" y="246" width="26" height="92" rx="12"/><rect x="110" y="246" width="26" height="92" rx="12"/></g>'}
+
+        <!-- CALVES -->
+        ${isF
+          ? '<g id="mf-calves" class="hm-muscle"><rect x="64" y="340" width="26" height="34" rx="10"/><rect x="110" y="340" width="26" height="34" rx="10"/></g>'
+          : '<g id="mb-calves" class="hm-muscle"><rect x="64" y="340" width="26" height="34" rx="10"/><rect x="110" y="340" width="26" height="34" rx="10"/></g>'}
+      </svg>
+    </div>`;
+}
+
+// Map UI names → SVG ids for front/back
+const HM_ID_MAP_FRONT = {
+  'Chest':'mf-chest','Front Delt':'mf-front-delt','Traps':'mf-traps',
+  'Biceps':'mf-biceps','Forearms':'mf-forearms','Core':'mf-core',
+  'Glutes':'mf-glutes','Quads':'mf-quads','Calves':'mf-calves'
+};
+const HM_ID_MAP_BACK = {
+  'Upper Back':'mb-upper-back','Back Delt':'mb-back-delt','Traps':'mb-traps',
+  'Triceps':'mb-triceps','Forearms':'mb-forearms','Lower Back':'mb-lower-back',
+  'Glutes':'mb-glutes','Hamstrings':'mb-hamstrings','Calves':'mb-calves'
+};
+
+function renderHeatmapsInto(containerFront, containerBack){
+  ensureHeatmapStyles();
+  const score = computeMuscleFocus(state.period || 'week');
+  if(containerFront){
+    containerFront.innerHTML = heatmapSVG('front');
+    applyHeatToSvg(containerFront.querySelector('svg'), score, HM_ID_MAP_FRONT);
+  }
+  if(containerBack){
+    containerBack.innerHTML = heatmapSVG('back');
+    applyHeatToSvg(containerBack.querySelector('svg'), score, HM_ID_MAP_BACK);
+  }
+}
+
+// Mobile bleed helper for atlas/heatmaps inside summary cards
+function ensureAtlasMobileBleed() {
+  try{
+    const isPhone = window.innerWidth <= 480;
+    ['#hmFrontBox', '#hmBackBox'].forEach(sel=>{
+      const box = document.querySelector(sel);
+      if(!box) return;
+      const card = box.closest('.summary-card');
+      const svg  = box.querySelector('svg');
+      if(isPhone && card){
+        // Expand content to bleed through card padding (assumes 14px horizontal padding)
+        box.style.marginLeft  = '-14px';
+        box.style.marginRight = '-14px';
+        box.style.width       = 'calc(100% + 28px)';
+        box.style.maxWidth    = 'none';
+        box.style.overflow    = 'visible';
+        if(svg){
+          svg.style.maxWidth = 'none';
+          svg.style.width    = '100%';
+          svg.style.height   = 'auto';
+        }
+      } else {
+        // Reset on larger screens
+        box.style.removeProperty('margin-left');
+        box.style.removeProperty('margin-right');
+        box.style.removeProperty('width');
+        box.style.removeProperty('max-width');
+        box.style.removeProperty('overflow');
+        if(svg){
+          svg.style.removeProperty('max-width');
+          svg.style.removeProperty('width');
+          svg.style.removeProperty('height');
+        }
+      }
+    });
+  }catch(_){}
+};
+// --- Atlas v1: high‑fidelity SVG support with graceful fallback ---
+(function(){
+  function ensureAtlasStyles(){
+    if (document.getElementById('atlas-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'atlas-styles';
+    s.textContent = `
+      .atlas-wrap{ width:100%; display:flex; align-items:center; justify-content:center; }
+      .atlas-svg{ width:100%; height:auto; max-width:468px; }
+      /* Base silhouette (all shapes default to dark) */
+      .atlas-sil{ fill:#15191e !important; stroke:rgba(255,255,255,.10); stroke-width:1.2; vector-effect:non-scaling-stroke; }
+      /* Optional outline group if present in the SVG */
+      .atlas-outline{ fill:none; stroke:rgba(255,255,255,.10); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+      /* Highlighted muscle regions (mapped ids) */
+      .atlas-muscle{ fill: var(--accent); fill-opacity:.18; stroke: rgba(255,255,255,.18); stroke-width:.75; vector-effect: non-scaling-stroke; }
+      .atlas-muscle.t1{ fill: var(--accent); fill-opacity:.90; }
+      .atlas-muscle.t2{ fill: var(--accent); fill-opacity:.55; }
+      .atlas-muscle.t3{ fill: var(--accent); fill-opacity:.30; }
+      /* Absolute warnings override tiers */
+      .atlas-muscle.warn{ fill: var(--warn, #F6C453) !important; fill-opacity:.15 !important; }
+      .atlas-muscle.danger{ fill: var(--danger, #FF6B6B) !important; fill-opacity:.15 !important; }
+      .atlas-muscle.dim{ fill: var(--accent); fill-opacity:.10; }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // Try to render an inline SVG string + apply heat tiers by id map
+  function renderSvgInto(container, svgString, idMap, score){
+    if (!container || !svgString) return false;
+    ensureAtlasStyles();
+    // Wrap to control sizing
+    const wrap = document.createElement('div');
+    wrap.className = 'atlas-wrap';
+    // Insert SVG markup
+    wrap.innerHTML = svgString;
+    // Normalize: find the root svg and ensure a class
+    const svg = wrap.querySelector('svg');
+    if (!svg) return false;
+    svg.classList.add('atlas-svg');
+
+    // Build a Set of mapped element ids (accept string or array per muscle)
+    const mappedIds = new Set();
+    if (idMap && typeof idMap === 'object'){
+      Object.values(idMap).forEach(entry => {
+        if (!entry) return;
+        if (Array.isArray(entry)) {
+          entry.forEach(id => { if (id) mappedIds.add(String(id)); });
+        } else {
+          mappedIds.add(String(entry));
+        }
+      });
+    }
+
+    // For every element that has an id, add either .atlas-muscle (if mapped) or .atlas-sil (default)
+    // We only touch basic shapes/groups to avoid styling defs/gradients.
+    svg.querySelectorAll('[id]').forEach(el => {
+      const id = el.getAttribute('id');
+      // Skip <defs> content
+      if (el.closest('defs')) return;
+      // Mark mapped vs silhouette
+      if (mappedIds.has(id)) {
+        el.classList.add('atlas-muscle');
+        el.classList.remove('atlas-sil');
+      } else {
+        // Do not override explicit atlas-muscle groups from authoring
+        if (!el.classList.contains('atlas-muscle')) {
+          el.classList.add('atlas-sil');
+        }
+      }
+    });
+
+    // Place content
+    container.innerHTML = '';
+    container.appendChild(wrap);
+
+    // Color by tiers (reuse existing ranking logic)
+    if (idMap && score){
+      // tier map by muscle name
+      const tiers = (function(){
+        try{
+          return _tierMap6(score);
+        }catch(_){
+          const out={}; score.forEach((_,k)=> out[k]='t6'); return out;
+        }
+      })();
+
+      // First dim all explicitly mapped shapes
+      mappedIds.forEach(id=>{
+        const el = svg.getElementById ? svg.getElementById(id) : svg.querySelector('#'+CSS.escape(id));
+        if (el){ el.classList.remove('t1','t2','t3','t4','t5','t6','warn','danger'); el.classList.add('dim'); }
+      });
+
+      // Apply tier classes per muscle name
+      Object.entries(idMap).forEach(([muscle, entry])=>{
+        const ids = Array.isArray(entry) ? entry : [entry];
+        const tier = tiers[muscle] || 't6';
+
+        // Raw score for absolute thresholds
+        const raw = (score && typeof score.get === 'function') ? Number(score.get(muscle) || 0) : 0;
+
+        ids.forEach(id=>{
+          if (!id) return;
+          const el = svg.getElementById ? svg.getElementById(id) : svg.querySelector('#'+CSS.escape(id));
+          if (!el) return;
+
+          // Remove previous state classes
+          el.classList.remove('dim','t1','t2','t3','t4','t5','t6','warn','danger');
+          el.classList.add('atlas-muscle', tier);
+          el.classList.remove('atlas-sil');
+
+          // Strip inline attributes that can override CSS
+          const clearInline = (node)=>{
+            try{
+              node.removeAttribute('fill');
+              node.removeAttribute('fill-opacity');
+              // keep stroke from authoring; just clear opacity
+              node.style && node.style.removeProperty && node.style.removeProperty('opacity');
+            }catch(_){}
+            // Also process direct children (common in grouped paths)
+            if (node.children && node.children.length){
+              [...node.children].forEach(clearInline);
+            }
+          };
+          clearInline(el);
+
+          // Absolute warnings override tier color via CSS
+if (raw <= 2) {
+  el.classList.add('danger');
+} else if (raw <= 9) {
+  el.classList.add('warn');
+}
+        });
+      });
+    }
+
+    return true;
+  }
+
+  // Public API (idempotent): prefer window.MUSCLE_ATLAS_* globals if present
+  window.renderMuscleAtlas = function(containerFront, containerBack){
+    try{
+      const score = computeMuscleFocus(state.period || 'week');
+
+      const fSvg = window.MUSCLE_ATLAS_FRONT_SVG || null;
+      const bSvg = window.MUSCLE_ATLAS_BACK_SVG  || null;
+      const fMap = window.MUSCLE_ATLAS_FRONT_IDS || null;
+      const bMap = window.MUSCLE_ATLAS_BACK_IDS  || null;
+
+      let didFront = false, didBack = false;
+
+      if (containerFront && fSvg && fMap){
+        didFront = renderSvgInto(containerFront, fSvg, fMap, score);
+      }
+      if (containerBack && bSvg && bMap){
+        didBack = renderSvgInto(containerBack, bSvg, bMap, score);
+      }
+
+      // Fallback to simplified heatmap for whichever side wasn’t rendered
+      if (!didFront || !didBack){
+        renderHeatmapsInto(!didFront ? containerFront : null, !didBack ? containerBack : null);
+      }
+    }catch(_){
+      // Hard fallback if anything goes wrong
+      try { renderHeatmapsInto(containerFront, containerBack); } catch(__){}
+    }
+  };
+})();
+
+/* === Atlas asset bootstrap (front/back SVG + id maps) =======================
+   This makes the high-fidelity heatmap work even if the app didn't set
+   window.MUSCLE_ATLAS_* globals yet. It looks for inline <script> tags that
+   you can paste the raw SVG / JSON into, and registers them once.
+   - <script id="atlas-front-svg" type="text/plain">...SVG markup...</script>
+   - <script id="atlas-front-ids" type="application/json">{"Chest":"ID", ...}</script>
+   - <script id="atlas-back-svg"  type="text/plain">...SVG markup...</script>
+   - <script id="atlas-back-ids"  type="application/json">{"Upper Back":"ID", ...}</script>
+*/
+(function(){
+  function readText(id){
+    const el = document.getElementById(id);
+    if (!el) return null;
+    // innerHTML preserves markup for type="text/plain"
+    const txt = (el.textContent && el.textContent.trim()) || (el.innerHTML && el.innerHTML.trim()) || '';
+    return txt || null;
+  }
+  function readJSON(id){
+    const t = readText(id);
+    if (!t) return null;
+    try{ return JSON.parse(t); }catch(_){ console.warn('atlas ids JSON parse failed for', id); return null; }
+  }
+  window.ensureAtlasAssets = function ensureAtlasAssets(){
+    try{
+      // Only fill globals if they aren't already present
+      if (!window.MUSCLE_ATLAS_FRONT_SVG){
+        const s = readText('atlas-front-svg');
+        if (s) window.MUSCLE_ATLAS_FRONT_SVG = s;
+      }
+      if (!window.MUSCLE_ATLAS_FRONT_IDS){
+        const m = readJSON('atlas-front-ids');
+        if (m) window.MUSCLE_ATLAS_FRONT_IDS = m;
+      }
+      if (!window.MUSCLE_ATLAS_BACK_SVG){
+        const s = readText('atlas-back-svg');
+        if (s) window.MUSCLE_ATLAS_BACK_SVG = s;
+      }
+      if (!window.MUSCLE_ATLAS_BACK_IDS){
+        const m = readJSON('atlas-back-ids');
+        if (m) window.MUSCLE_ATLAS_BACK_IDS = m;
+      }
+      // One-time log (debug)
+      if (window.MUSCLE_ATLAS_FRONT_SVG || window.MUSCLE_ATLAS_BACK_SVG){
+        if (!window.__atlasOnce){
+          console.log('✅ Muscle atlas assets detected.',
+            { frontSvg: !!window.MUSCLE_ATLAS_FRONT_SVG, frontIds: !!window.MUSCLE_ATLAS_FRONT_IDS,
+              backSvg:  !!window.MUSCLE_ATLAS_BACK_SVG,  backIds:  !!window.MUSCLE_ATLAS_BACK_IDS });
+          window.__atlasOnce = true;
+        }
+      }
+    }catch(err){
+      console.warn('ensureAtlasAssets error', err);
+    }
+  };
+
+  // Optional: simple registration API if you prefer to set assets from code
+  window.registerMuscleAtlas = function registerMuscleAtlas({front, back}){
+    if (front){
+      if (front.svg) window.MUSCLE_ATLAS_FRONT_SVG = front.svg;
+      if (front.ids) window.MUSCLE_ATLAS_FRONT_IDS = front.ids;
+    }
+    if (back){
+      if (back.svg) window.MUSCLE_ATLAS_BACK_SVG = back.svg;
+      if (back.ids) window.MUSCLE_ATLAS_BACK_IDS = back.ids;
+    }
+    // Make sure styles and render function exist, and then trigger a re-render if summary is visible
+    try{
+      if (typeof window.renderMuscleAtlas === 'function'){
+        const fr = document.getElementById('hmFrontBox');
+        const br = document.getElementById('hmBackBox');
+        if (fr || br) window.renderMuscleAtlas(fr, br);
+      }
+    }catch(_){}
+  };
+})();
 
 function renderSummary(){
   // keep nav active state in sync with current page
@@ -1606,7 +2187,32 @@ function renderSummary(){
         </div>
       </div>
 
-      <!-- Row 2: Wide Box (full width) -->
+      
+      <!-- Row 3: Two Default Boxes -->
+      <div>
+        <div class="summary-box-header">Front Heat Map</div>
+        <div class="summary-card default">
+          <div id="hmFrontBox" class="summary-stats"></div>
+        </div>
+      </div>
+      <div>
+        <div class="summary-box-header">Back Heat Map</div>
+        <div class="summary-card default">
+          <div id="hmBackBox" class="summary-stats"></div>
+        </div>
+      </div>
+
+<!-- Row 4: Muscle Focus (full width) -->
+<div class="row-wide">
+  <div class="summary-box-header">Muscle Focus</div>
+  <div class="summary-card wide">
+    <div class="summary-stats">
+      <div id="muscleBarsBox"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Row 2: Wide Box (full width) -->
       <div class="row-wide">
         <div class="summary-box-header">Wide Box</div>
         <div class="summary-card wide">
@@ -1616,33 +2222,7 @@ function renderSummary(){
         </div>
       </div>
 
-      <!-- Row 3: Two Default Boxes -->
-      <div>
-        <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default">
-          <div class="summary-stats">
-            <div>Placeholder box (left) with 10px text.</div>
-          </div>
-        </div>
-      </div>
-      <div>
-        <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default">
-          <div class="summary-stats">
-            <div>Placeholder box (right) with 10px text.</div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Row 4: Wide Box (full width) -->
-      <div class="row-wide">
-        <div class="summary-box-header">Wide Box</div>
-        <div class="summary-card wide">
-          <div class="summary-stats">
-            <div>Another wide placeholder spanning both columns.</div>
-          </div>
-        </div>
-      </div>
 
     </div>`;
 
@@ -1650,6 +2230,13 @@ function renderSummary(){
   wrap.querySelectorAll('.row-wide').forEach(node=>{
     try{ node.style.gridColumn = '1 / -1'; } catch(_) {}
   });
+
+  // Render heatmaps every time Summary renders
+  try{
+    const frontC = document.getElementById('hmFrontBox');
+    const backC  = document.getElementById('hmBackBox');
+    renderHeatmapsInto(frontC, backC);
+  }catch(_){}
 }
 
 // ==== toast / flash ====
@@ -1670,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', ensureSuggestStyles);
 // ====== PATCH v5 ======
 // Make Summary its own page (toggle display) + body[data-page]
 function setPage(page){
-  state.page = page || 'list';
+  state.page = page || 'summary';
   store.set({ page: state.page });
   document.body.setAttribute('data-page', state.page);
   document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active', b.dataset.nav===state.page));
@@ -1688,18 +2275,18 @@ document.addEventListener('click', (e)=>{
 }, true);
 
 // Apply page on boot
-(function(){ document.body.setAttribute('data-page', state.page || 'list'); })();
+(function(){ document.body.setAttribute('data-page', state.page || 'summary'); })();
 
 
 // Ensure renderSummary maintains page dataset for CSS
 const _renderSummaryOriginal = renderSummary;
 renderSummary = function(){
-  document.body.setAttribute('data-page', state.page || 'list');
+  document.body.setAttribute('data-page', state.page || 'summary');
   _renderSummaryOriginal();
 };
 
 // On initial boot, apply page
-setTimeout(()=>setPage(state.page || 'list'), 0);
+setTimeout(()=>setPage(state.page || 'summary'), 0);
 
 
 
@@ -2477,10 +3064,13 @@ function recomputeSuggestionsV15(){
   if(typeof fetchAll==='function'){
     const _f=fetchAll;
     fetchAll = async function(){
-      const r=await _f.apply(this, arguments);
-      setTimeout(recomputeSuggestionsV15, 0);
-      return r;
-    };
+  const r=await _f.apply(this, arguments);
+  setTimeout(recomputeSuggestionsV15, 0);
+  if ((state.page||'summary') === 'summary') {
+    setTimeout(()=>{ try{ renderSummary(); }catch(_){}} , 0);
+  }
+  return r;
+};
   }
   document.addEventListener('DOMContentLoaded', ()=> setTimeout(recomputeSuggestionsV15, 250));
   const _render = (typeof renderList==='function' && renderList) || (typeof renderExercises==='function' && renderExercises) || null;
@@ -2597,7 +3187,7 @@ renderSummary = function(){
         <div class="summary-box-header">Streaks</div>
         <div class="summary-card quad">
           <div class="quad"><div class="label">Current Streak</div><div class="value" data-metric="cons">${consWeeks}</div></div>
-          <div class="quad"><div class="label">Duo Counts</div><div class="value" data-metric="couple">${coupleWeeks}</div></div>
+          <div class="quad"><div class="label">Duo Counter</div><div class="value" data-metric="couple">${coupleWeeks}</div></div>
           <div class="quad"><div class="label">Longest Streak</div><div class="value" data-metric="best">${st.best}</div></div>
           <div class="quad"><div class="label">Perfect Weeks</div><div class="value" data-metric="perfect">${st.perfectWeeks}</div></div>
         </div>
@@ -2641,7 +3231,26 @@ renderSummary = function(){
         </div>
       </div>
 
-      <!-- Row 2: Recent Workouts (full width) -->
+      
+      <!-- Row 3: Heat Maps -->
+      <div>
+        <div class="summary-box-header">Front Heat Map</div>
+        <div class="summary-card default"><div class="summary-stats"><div id="hmFrontBox"></div></div></div>
+      </div>
+      <div>
+        <div class="summary-box-header">Back Heat Map</div>
+        <div class="summary-card default"><div class="summary-stats"><div id="hmBackBox"></div></div></div>
+      </div>
+
+      <!-- Row 4: Muscle Focus (full width) -->
+<div class="row-wide">
+  <div class="summary-box-header">Muscle Focus</div>
+  <div class="summary-card wide"><div class="summary-stats"><div id="muscleBarsBox"></div></div></div>
+</div>
+
+
+
+<!-- Row 2: Recent Workouts (full width) -->
       <div class="row-wide">
         <div class="summary-box-header">Recent Workouts</div>
         <div class="summary-card wide">
@@ -2652,22 +3261,27 @@ renderSummary = function(){
         </div>
       </div>
 
-      <!-- Row 3: Two Default Boxes -->
-      <div>
-        <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default"><div class="summary-stats"><div>Left default box</div></div></div>
-      </div>
-      <div>
-        <div class="summary-box-header">Default Box</div>
-        <div class="summary-card default"><div class="summary-stats"><div>Right default box</div></div></div>
-      </div>
 
-      <!-- Row 4: Wide Box (full width) -->
-      <div class="row-wide">
-        <div class="summary-box-header">Wide Box</div>
-        <div class="summary-card wide"><div class="summary-stats"><div>Another wide box</div></div></div>
-      </div>
+
+
+
     </div>`;
+
+
+
+
+
+  // Render Muscle Focus bars now that the DOM node exists
+  (function(){
+    const mbarBox = document.getElementById('muscleBarsBox');
+    if (!mbarBox) return;
+    try {
+      renderMuscleBars(mbarBox);
+    } catch (err) {
+      console.warn('renderMuscleBars deferred render failed; retrying...', err);
+      setTimeout(() => { try { renderMuscleBars(mbarBox); } catch(_) {} }, 0);
+    }
+  })();
 
   // Enforce breathing room above "This Week" cubes (avoid margin-collapsing)
   try {
@@ -2702,7 +3316,177 @@ renderSummary = function(){
   if (recentBox) {
     renderRecentWorkouts(recentBox, state.logs || []);
   }
+
+  // Render muscle atlas (ensure assets loaded before rendering)
+  try {
+    // Load atlas assets from inline script tags if globals not set
+    if (typeof ensureAtlasAssets === 'function') ensureAtlasAssets();
+    const frontC = document.getElementById('hmFrontBox');
+    const backC  = document.getElementById('hmBackBox');
+    if (frontC || backC) {
+      renderMuscleAtlas(frontC, backC);
+    }
+  } catch(_) {}
+  // Ensure edge-to-edge sizing on phones (JS-side, without touching global CSS)
+  ensureAtlasMobileBleed();
+  // Keep it correct on orientation/resize
+  (function(){
+    if (window.__atlasBleedBound) return;
+    window.__atlasBleedBound = true;
+    window.addEventListener('resize', ensureAtlasMobileBleed, { passive:true });
+    window.addEventListener('orientationchange', ensureAtlasMobileBleed, { passive:true });
+  })();
 };
+
+
+
+// ==== Muscle Focus Bars (sideways) ====
+function ensureMuscleBarsStyles(){
+  let s = document.getElementById('muscle-bars-styles');
+  if (!s){
+    s = document.createElement('style');
+    s.id = 'muscle-bars-styles';
+    document.head.appendChild(s);
+  }
+  s.textContent = `
+    .mbar-wrap{ width:100%; }
+    .mbar-table{ width:100%; }
+    .mbar-row{
+      display:grid;
+      grid-template-columns: 66px 1fr 19px; /* name | bar | value */
+      align-items:center;
+      gap:8px;
+      padding:2px 0;
+    }
+    .mbar-name{ text-align:left; font-weight:400; opacity:1; transition:opacity .25s ease; }
+    .mbar-val{ text-align:right; font-variant-numeric: tabular-nums; opacity:1; transition:opacity .25s ease; }
+    .mbar-track{
+      position:relative;
+      width:100%;
+      height:2px;
+      border-radius:7px;
+      background: rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    .mbar-fill{
+      position:absolute; inset:0 auto 0 0;
+      width:0%;
+      height:100%;
+      border-radius:7px;
+      background: var(--accent);
+      opacity:.9;
+      transition: width .45s cubic-bezier(.2,.6,.2,1), background-color .2s ease, opacity .2s ease;
+    }
+    /* Threshold tinting (matches your heatmap logic): */
+    .mbar-fill.warn{ background: var(--warn, #F6C453); opacity:.40; }
+    .mbar-fill.danger{ background: var(--danger, #FF6B6B); opacity:.40; }
+  `;
+}
+
+// Build + animate bars for the current period
+function renderMuscleBars(container){
+  if (!container) return;
+  ensureMuscleBarsStyles();
+  // Reset container early so you always see *something* even if there’s no data
+  container.innerHTML = '<div class="mbar-wrap"><div class="mbar-table"></div></div>';
+  const table = container.querySelector('.mbar-table');
+
+  // points per muscle (Map) using your unified logic
+  const per = state.period || 'week';
+  const score = computeMuscleFocus(per);
+
+  // Canonical list to guarantee rows for every muscle (even if 0 this period)
+  const MUSCLE_CANON = [
+    'Chest','Front Delt','Back Delt',
+    'Biceps','Triceps','Forearms',
+    'Core',
+    'Upper Back','Lower Back','Traps',
+    'Glutes','Quads','Hamstrings','Calves'
+  ];
+
+  // Build entries from the canonical list, falling back to 0 when missing
+  let muscleEntries = MUSCLE_CANON.map(name => ({
+    name,
+    val: Number((score && score.get && score.get(name)) || 0)
+  }));
+
+  // If there are any muscles present in the score map that are not in the
+  // canonical list (e.g., new aliases), include them at the end.
+  try {
+    const known = new Set(MUSCLE_CANON);
+    for (const [name, v] of (score ? score.entries() : [])) {
+      if (!known.has(name)) {
+        muscleEntries.push({ name, val: Number(v) || 0 });
+        known.add(name);
+      }
+    }
+  } catch (_) {}
+
+  // Sort descending for display
+  muscleEntries.sort((a, b) => b.val - a.val);
+
+  // Empty state message if no data
+  if (!muscleEntries.length) {
+    table.innerHTML = '<div class="mbar-row" style="opacity:.6;">No data yet for this period.</div>';
+    return;
+  }
+
+  // keep previous widths for smooth animation
+  const cacheKey = '__mbarPrev';
+  const prev = window[cacheKey] || {};
+
+  // Ensure maxVal is sane to avoid divide-by-zero and NaN widths
+  const maxVal = (muscleEntries.length && muscleEntries[0].val > 0) ? muscleEntries[0].val : 1;
+
+  muscleEntries.forEach(r=>{
+    const row = document.createElement('div');
+    row.className = 'mbar-row';
+    row.setAttribute('data-muscle', r.name);
+
+    const name = document.createElement('div');
+    name.className = 'mbar-name';
+    name.textContent = r.name;
+
+    const track = document.createElement('div');
+    track.className = 'mbar-track';
+    const fill = document.createElement('div');
+    fill.className = 'mbar-fill';
+    // ≤2 → red, ≤9 → yellow (else user color)
+    if (r.val <= 2) fill.classList.add('danger');
+    else if (r.val <= 9) fill.classList.add('warn');
+    track.appendChild(fill);
+
+    const val = document.createElement('div');
+    val.className = 'mbar-val';
+    val.textContent = String(Math.round(r.val));
+
+    row.appendChild(name);
+    row.appendChild(track);
+    row.appendChild(val);
+    table.appendChild(row);
+
+    // Minimum width for zero values: 1%
+    const barWidth = r.val > 0 ? (r.val / maxVal) * 100 : 1;
+    // Animate width (almost to edge → 98% max for nonzero, else 1%)
+    const newPct  = Math.max(0, Math.min(100, barWidth * .95));
+    const prevPct = (prev[r.name] != null) ? prev[r.name] : 0;
+    fill.style.width = prevPct + '%';
+    // subtle fade for labels to signal resort
+    name.style.opacity = '0';
+    val .style.opacity = '0';
+    requestAnimationFrame(()=>{
+      fill.style.width = newPct + '%';
+      name.style.opacity = '1';
+      val .style.opacity = '1';
+    });
+    prev[r.name] = newPct;
+  });
+
+  window[cacheKey] = prev;
+  try { console.debug('✅ Muscle Focus rendered:', muscleEntries.length, 'rows'); } catch(_) {}
+}
+
+
 
 // ==== Recent Workouts Table ====
 function ensureRecentTableStyles(){

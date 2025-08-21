@@ -776,3 +776,97 @@ body[data-page="summary"] #summaryContent{ padding: 0; }
 
 /* Week dots wrapper can opt-in to custom bottom margin; keep modest by default */
 #page-summary .summary-card.default .summary-stats .week-cubes{ margin: 0 0 var(--half-line) 0 !important; }
+
+/* Base shade */
+.atlas-sil { fill:#14181d !important; }
+
+/* User color */
+:root { --accent: #2bd2c8; }
+
+/* Opacity / stroke polish — use accent for all tiers (no white/red) */
+.atlas-muscle { fill:var(--accent); fill-opacity:.28; stroke:rgba(255,255,255,.18); }
+.atlas-muscle.t1 { fill:var(--accent); fill-opacity:.90; }   /* top tier */
+.atlas-muscle.t2 { fill:var(--accent); fill-opacity:.55; }
+.atlas-muscle.t3 { fill:var(--accent); fill-opacity:.30; }
+.atlas-muscle.dim { fill:var(--accent); fill-opacity:.10; }
+
+/* Muscle atlas sizing (enlarge by ~30%) */
+svg.atlas-svg,
+svg.hm-svg,
+[id^="atlas"] svg {
+  width: 100%;
+  height: auto;
+  max-width: 468px; /* was ~360px */
+}
+/* avoid clipping when scaled */
+.summary-card.default,
+.summary-card.wide {
+  overflow: visible;
+}
+/* === Mobile: let atlas/hm SVG bleed through card padding (edge-to-edge) === */
+@media (max-width: 480px){
+  /* cancel inner padding effect so graphics can use full card width */
+  .summary-card.default .atlas-svg,
+  .summary-card.wide .atlas-svg,
+  .summary-card.default .hm-svg,
+  .summary-card.wide .hm-svg{
+    display:block;
+    width: calc(100% + 28px);   /* card width + left/right padding (14px each) */
+    margin-left: -14px;         /* negate the card's left padding */
+    margin-right: -14px;        /* negate the card's right padding (in case of different UA calc) */
+    max-width: none;            /* don't clamp at previous max */
+  }
+  /* ensure container won't clip the bleed */
+  .summary-card.default,
+  .summary-card.wide{
+    overflow: visible;
+  }
+}
+
+/* === Heatmap cards: reduce inner padding by ~60% (14px -> 6px) === */
+.summary-card:has(#hmFrontBox),
+.summary-card:has(#hmBackBox){
+  padding: 6px;
+}
+
+/* === Six-tier heatmap opacity system (accent color; CSS first, JS will assign t1–t6) === */
+:root{
+  --tier1: .92;  /* heaviest emphasis */
+  --tier2: .75;
+  --tier3: .58;
+  --tier4: .40;
+  --tier5: .24;
+  --tier6: .12;  /* lightest visible */
+  --tier-dim: .08;
+}
+/* Atlas (high-fidelity SVG) tiers */
+.atlas-muscle.t1{ fill: var(--accent); fill-opacity: var(--tier1); }
+.atlas-muscle.t2{ fill: var(--accent); fill-opacity: var(--tier2); }
+.atlas-muscle.t3{ fill: var(--accent); fill-opacity: var(--tier3); }
+.atlas-muscle.t4{ fill: var(--accent); fill-opacity: var(--tier4); }
+.atlas-muscle.t5{ fill: var(--accent); fill-opacity: var(--tier5); }
+.atlas-muscle.t6{ fill: var(--accent); fill-opacity: var(--tier6); }
+.atlas-muscle.dim{ fill: var(--accent); fill-opacity: var(--tier-dim); }
+
+/* Simplified heatmap tiers (if used anywhere) */
+.hm-muscle.t1{ fill: var(--accent); fill-opacity: var(--tier1); }
+.hm-muscle.t2{ fill: var(--accent); fill-opacity: var(--tier2); }
+.hm-muscle.t3{ fill: var(--accent); fill-opacity: var(--tier3); }
+.hm-muscle.t4{ fill: var(--accent); fill-opacity: var(--tier4); }
+.hm-muscle.t5{ fill: var(--accent); fill-opacity: var(--tier5); }
+.hm-muscle.t6{ fill: var(--accent); fill-opacity: var(--tier6); }
+.hm-muscle.dim{ fill: var(--accent); fill-opacity: var(--tier-dim); }
+
+/* === Threshold coloring (score-based) — applied by JS when points ≤9 (warn) or ≤2 (danger) === */
+:root{
+  --warn:#f5d061; /* yellow for under-10 */
+}
+/* When a region is flagged as warn/danger, these override tier colors */
+.atlas-muscle.warn, .hm-muscle.warn{
+  fill: var(--warn) !important;
+  fill-opacity: 0.15 !important;
+}
+.atlas-muscle.danger, .hm-muscle.danger{
+  fill: var(--danger) !important;
+  fill-opacity: 0.15 !important;
+}
