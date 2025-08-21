@@ -526,6 +526,7 @@ function _deltaSpan(val, unit){
 }
 function deltaLineHTML(exId, side){
   const want = String(side||'both').toLowerCase();
+  const forcePerSide = isUnilateral(exId);
 
   const tsOf = (l)=>{
     if(!l) return 0; const t = l.timestamp || l.date; return t ? new Date(t).getTime() : 0;
@@ -540,7 +541,7 @@ function deltaLineHTML(exId, side){
   };
 
   // Explicit unilateral: show only non-zero parts; hide if nothing changed
-  if(want!=="both"){
+  if(want!=="both" && !forcePerSide){
     const sug = suggestNext(exId, want);
     const last = latestFor(exId, want);
     if(!last) return '';
@@ -557,7 +558,7 @@ function deltaLineHTML(exId, side){
   const newest = Math.max(tsOf(lastBoth), tsOf(lastR), tsOf(lastL));
 
   // If last log was BOTH → show unified pair, only if any change
-  if(lastBoth && tsOf(lastBoth) === newest){
+  if(!forcePerSide && lastBoth && tsOf(lastBoth) === newest){
     const sug = suggestNext(exId, 'both');
     const dW = Number(sug.weight||0) - Number(lastBoth.weight_lb||0);
     const dR = Number(sug.reps||0)   - Number(lastBoth.planned_reps||0);
@@ -862,6 +863,17 @@ function renderFilters(){
 }
 
 // ==== Cards/List ====
+
+// Detect if an exercise is logged per-side (left/right) historically
+function isUnilateral(exId){
+  try{
+    for (const l of (state.logs||[])){
+      if(l.exercise_id===exId && (l.side==='left' || l.side==='right')) return true;
+    }
+  }catch(_){ }
+  return false;
+}
+
 function makeCardHTML(e){
   const sugg = suggestNext(e.id, chooseSide(e.id));
   const variation = e.variation ? `<span class="variation">• ${e.variation}</span>` : '';
@@ -2253,6 +2265,40 @@ function totalLogsInPeriod(period, userId){
   return r.workouts;
 }
 
+// --- Deload gate: require two consecutive underperforming weeks before deloading ---
+function _weekKeyFromDate(d){
+  const base = (d instanceof Date) ? d : new Date(d);
+  const wk   = _startOfWeekLocal(base, WEEK_START||0);
+  return wk.toISOString().slice(0,10);
+}
+function _shouldDeloadGate(exId, userId, weekKey, trigger){
+  // trigger=true when this week underperformed (or RPE very high)
+  // Returns true only if this is the **second** consecutive week with trigger
+  try{
+    const map = _loadMap('underperfGate');
+    const k   = `${userId||'u_camp'}|${exId}`;
+    const rec = map[k] || { wk:'', flagged:false };
+    let deload = false;
+    if(trigger){
+      if(rec.flagged && rec.wk && rec.wk !== weekKey){
+        // Second consecutive week → allow deload and clear flag for next cycle
+        deload = true;
+        rec.flagged = false;
+        rec.wk = weekKey;
+      } else {
+        // First underperforming week → set flag, no deload yet
+        rec.flagged = true;
+        rec.wk = weekKey;
+      }
+    } else {
+      // Good week → clear flag
+      rec.flagged = false; rec.wk = weekKey;
+    }
+    map[k] = rec; _saveMap('underperfGate', map);
+    return deload;
+  }catch(_){ return trigger; }
+}
+
 function computeNextFromPerformance(last, ex){
   // Config knobs & safe fallbacks
   const INC = Number(ex?.increment_lb || CONFIG?.DEFAULT_INC_LB || 5);
@@ -2274,64 +2320,78 @@ function computeNextFromPerformance(last, ex){
 
   const ratio = achieved / planned; // over/under performance
 
-  // ===== UNDER-PERFORMANCE =====
-  if (ratio < 1.0) {
+  // Identify exercise/user/week once (for deload gating)
+  const exId   = (last && last.exercise_id) || (ex && ex.id) || null;
+  const uid    = (last && (last.user_id||last.userId)) || (state && state.userId) || 'u_camp';
+  const lastYMD= (last && (_localYMDFromLog(last))) || today();
+  const wkKey  = (function(d){ return _startOfWeekLocal(new Date(d+'T12:00:00'), Number(CONFIG?.WEEK_START||0)).toISOString().slice(0,10); })(lastYMD);
+
+  // Gate deloads: only deload on the second consecutive "under" week (missed reps OR very high RPE)
+  const gateTrigger = (ratio < 1.0) || (rpe >= RPE_VH);
+  const deloadNow   = _shouldDeloadGate(exId, uid, wkKey, gateTrigger);
+
+  // If this is the second consecutive under week, apply a deload immediately (regardless of ratio category)
+  if (deloadNow) {
     if (ratio <= 0.5 || rpe >= RPE_VH) {
-      // Way under or brutally hard → larger deload; reps down a touch (but not forced to 8)
       nextWeight = Math.max(0, nextWeight - 2*INC);
-      nextReps   = Math.max(8, planned - 2);
+      nextReps   = Math.max(REP_MIN, planned - 2);
     } else if (ratio <= 0.9) {
-      // Moderately under → small deload; if it didn't feel awful, keep volume by nudging reps up
       nextWeight = Math.max(0, nextWeight - 1*INC);
-      if (rpe <= 8) {
-        nextReps = Math.min(REP_MAX, planned + 1); // "weight down, reps up a touch"
-      } else {
-        nextReps = Math.max(REP_MIN, planned);
-      }
+      // Small rep recovery if effort wasn't extreme
+      nextReps   = (rpe <= 8) ? Math.min(REP_MAX, planned + 1) : Math.max(REP_MIN, planned);
     } else {
-      // Slight miss → hold weight; adjust reps based on RPE
-      nextReps = (rpe >= 9) ? Math.max(REP_MIN, planned - 1) : planned;
+      // Hit reps but RPE previously high two weeks running → light deload
+      nextWeight = Math.max(0, nextWeight - 1*INC);
+      nextReps   = Math.max(REP_MIN, planned);
     }
-  }
-
-  // ===== ON TARGET (exact) =====
-  else if (ratio === 1.0) {
-    if (nextReps < REP_MAX && rpe <= RPE_OK) {
-      nextReps = Math.min(REP_MAX, planned + 1);
-    } else if (nextReps >= REP_MAX && rpe <= RPE_OK) {
-      nextReps = REP_MIN;               // cycle reps down
-      nextWeight = nextWeight + INC;    // progress via load
-    } // high RPE → hold
-  }
-
-  // ===== OVER-PERFORMANCE =====
-  else { // ratio > 1.0
-    if (ratio >= R2X && rpe <= 8.5){
-      // Smashed it → bigger jump on both axes
-      nextWeight = nextWeight + BIG_STEPS * INC; // typically +10 lb for 5-lb INC
-      nextReps   = Math.min(REP_MAX, planned + 3);
-    } else if (ratio >= R1P5X){
-      // 1.5×–2× → weight up and reps up more than +1
-      nextWeight = nextWeight + MED_STEPS * INC; // typically +5 lb
-      nextReps   = Math.min(REP_MAX, planned + 2);
-      if (rpe <= 8 && nextReps >= REP_MAX){
-        // If capped on reps and it felt easy, take an extra load step and cycle reps
-        nextWeight = nextWeight + 1*INC;
-        nextReps   = REP_MIN;
+  } else {
+    // Normal progression paths
+    if (ratio < 1.0) {
+      // First under week → conservative: hold load, tiny rep tweak only
+      nextWeight = Math.max(0, nextWeight); // unchanged
+      if (ratio <= 0.9) {
+        nextReps = (rpe >= 9) ? Math.max(REP_MIN, planned - 1) : planned;
+      } else {
+        nextReps = (rpe >= 9) ? Math.max(REP_MIN, planned - 1) : planned;
       }
-    } else if (ratio >= 1.25){
-      // Clear over-performance → emphasize reps first
-      nextReps = Math.min(REP_MAX, planned + 2);
-      if (rpe <= 8 && nextReps >= REP_MAX){
-        nextWeight = nextWeight + 1*INC;
-        nextReps   = REP_MIN;
+    } else if (ratio === 1.0) {
+      // On target
+      if (nextReps < REP_MAX && rpe <= RPE_OK) {
+        nextReps = Math.min(REP_MAX, planned + 1);
+      } else if (nextReps >= REP_MAX && rpe <= RPE_OK) {
+        nextReps   = REP_MIN;            // cycle reps down
+        nextWeight = nextWeight + INC;   // progress via load
       }
+      // high RPE on target → hold
     } else {
-      // Slight over → gentle nudge
-      nextReps = Math.min(REP_MAX, planned + 1);
-      if (rpe <= 8 && nextReps >= REP_MAX){
-        nextWeight = nextWeight + 1*INC;
-        nextReps   = REP_MIN;
+      // Over-performance
+      if (ratio >= R2X && rpe <= 8.5){
+        // Smashed it → bigger jump on both axes
+        nextWeight = nextWeight + BIG_STEPS * INC; // typically +10 lb for 5-lb INC
+        nextReps   = Math.min(REP_MAX, planned + 3);
+      } else if (ratio >= R1P5X){
+        // 1.5×–2× → weight up and reps up more than +1
+        nextWeight = nextWeight + MED_STEPS * INC; // typically +5 lb
+        nextReps   = Math.min(REP_MAX, planned + 2);
+        if (rpe <= 8 && nextReps >= REP_MAX){
+          // If capped on reps and it felt easy, take an extra load step and cycle reps
+          nextWeight = nextWeight + 1*INC;
+          nextReps   = REP_MIN;
+        }
+      } else if (ratio >= 1.25){
+        // Clear over-performance → emphasize reps first
+        nextReps = Math.min(REP_MAX, planned + 2);
+        if (rpe <= 8 && nextReps >= REP_MAX){
+          nextWeight = nextWeight + 1*INC;
+          nextReps   = REP_MIN;
+        }
+      } else {
+        // Slight over → gentle nudge
+        nextReps = Math.min(REP_MAX, planned + 1);
+        if (rpe <= 8 && nextReps >= REP_MAX){
+          nextWeight = nextWeight + 1*INC;
+          nextReps   = REP_MIN;
+        }
       }
     }
   }
@@ -2446,6 +2506,83 @@ renderSummary = function(){
   const workoutCnt  = _counts.workouts;
   const thisWeekSessions = st.thisWeekSessions || 0;
 
+  // --- PR helpers (best weight + optional bar weight add) ---
+  function _fmtMDY2(ymd){
+    if(!ymd) return '—';
+    const d = new Date(ymd+'T12:00:00');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${mm}-${dd}-${yy}`;
+  }
+  function bestWeightFor(exId, add){
+    let best = -Infinity, bestDate = '';
+    for (const l of (state.logs||[])){
+      if ((l.user_id||'u_camp')!==uid) continue;
+      if (l.exercise_id!==exId) continue;
+      const w = Number(l.weight_lb||0) + (add||0);
+      const ymd = _localYMDFromLog(l);
+      if (!ymd) continue;
+      if (w > best || (w===best && ymd > bestDate)){
+        best = w; bestDate = ymd;
+      }
+    }
+    if (!Number.isFinite(best) || best<0) return { w:null, date:null };
+    return { w: Math.round(best), date: bestDate };
+  }
+  function bestRepsFor(exId){
+    let best = -Infinity, bestDate = '';
+    for (const l of (state.logs||[])){
+      if ((l.user_id||'u_camp')!==uid) continue;
+      if (l.exercise_id!==exId) continue;
+      const reps = Math.max(Number(l.fail_reps||0), Number(l.planned_reps||0));
+      const ymd  = _localYMDFromLog(l);
+      if (!ymd) continue;
+      if (reps > best || (reps===best && ymd > bestDate)){
+        best = reps; bestDate = ymd;
+      }
+    }
+    if (!Number.isFinite(best) || best<0) return { val:null, date:null };
+    return { val: Math.round(best), date: bestDate };
+  }
+  // Define the four PRs (IDs and any bar add), mode-aware, per instructions
+  const PRS = [
+    // Pull-Up: reps only
+    { id: '0039_pull-up-v2', label: 'Pull-Up', mode: 'reps', unit: 'reps' },
+    // Bench Press: +20 lb, label as Bench
+    { id: '0003_bench-press', label: 'Bench', mode: 'weight', unit: 'lb', add: 20 },
+    // Curl (replace RDL), PR = weight / 2, label as Curl
+    { id: '0002_behind-body-cable-curl', label: 'Curl', mode: 'custom', unit: 'lb' },
+    // Squat: +20 lb, label as Squat
+    { id: '0001_back-squat', label: 'Squat', mode: 'weight', unit: 'lb', add: 20 },
+  ];
+  const prVals = PRS.map(def => {
+    if (def.mode === 'reps') {
+      const r = bestRepsFor(def.id);
+      return { ...def, ...r };
+    } else if (def.mode === 'weight') {
+      const r = bestWeightFor(def.id, def.add || 0);
+      return { ...def, val: (r && r.w != null ? r.w : null), date: r.date || null };
+    } else if (def.mode === 'custom' && def.id === '0002_behind-body-cable-curl') {
+      // For Curl, PR = max(weight_lb / 2), show rounded integer
+      let best = -Infinity, bestDate = '';
+      for (const l of (state.logs||[])) {
+        if ((l.user_id||'u_camp')!==uid) continue;
+        if (l.exercise_id!==def.id) continue;
+        const w = Number(l.weight_lb||0) / 2;
+        const ymd = _localYMDFromLog(l);
+        if (!ymd) continue;
+        if (w > best || (w === best && ymd > bestDate)) {
+          best = w; bestDate = ymd;
+        }
+      }
+      if (!Number.isFinite(best) || best < 0) return { ...def, val: null, date: null };
+      return { ...def, val: Math.round(best), date: bestDate };
+    } else {
+      return { ...def, val: null, date: null };
+    }
+  });
+
   // Build week dots for "This Week"
   const weekFlags = (function(){ try{ return daysThisWeekFlags(); }catch(_){ return {count:0, flags:new Array(7).fill(false)}; } })();
   const dotsHTML = weekFlags.flags.map(f =>
@@ -2460,7 +2597,7 @@ renderSummary = function(){
         <div class="summary-box-header">Streaks</div>
         <div class="summary-card quad">
           <div class="quad"><div class="label">Current Streak</div><div class="value" data-metric="cons">${consWeeks}</div></div>
-          <div class="quad"><div class="label">Dual Streak</div><div class="value" data-metric="couple">${coupleWeeks}</div></div>
+          <div class="quad"><div class="label">Duo Counts</div><div class="value" data-metric="couple">${coupleWeeks}</div></div>
           <div class="quad"><div class="label">Longest Streak</div><div class="value" data-metric="best">${st.best}</div></div>
           <div class="quad"><div class="label">Perfect Weeks</div><div class="value" data-metric="perfect">${st.perfectWeeks}</div></div>
         </div>
@@ -2492,34 +2629,25 @@ renderSummary = function(){
             <div class="chunk" style="margin-top:6px;">
               <div class="chunk-title"><strong>Personal Records</strong></div>
               <div class="pr-list" style="margin-top:3px; display:grid; row-gap:1px;">
-                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
-                  <span class="pr-label">Pull-up: <span class="accent" style="color:var(--accent)">—</span></span>
-                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
-                </div>
-                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
-                  <span class="pr-label">Bench Press: <span class="accent" style="color:var(--accent)">— lb</span></span>
-                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
-                </div>
-                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
-                  <span class="pr-label">Deadlift: <span class="accent" style="color:var(--accent)">— lb</span></span>
-                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
-                </div>
-                <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
-                  <span class="pr-label">Squat: <span class="accent" style="color:var(--accent)">— lb</span></span>
-                  <span class="pr-date" style="margin-left:auto; opacity:.6;">—</span>
-                </div>
+                ${prVals.map(p => `
+                  <div class="pr-row" style="display:flex; gap:8px; align-items:baseline;">
+                    <span class="pr-label">${p.label}: <span class="accent" style="color:var(--accent)">${p.val!=null ? `${p.val} ${p.unit}` : '—'}</span></span>
+                    <span class="pr-date" style="margin-left:auto; opacity:.6;">${p.date ? _fmtMDY2(p.date) : '—'}</span>
+                  </div>
+                `).join('')}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Row 2: Wide Box (full width) -->
+      <!-- Row 2: Recent Workouts (full width) -->
       <div class="row-wide">
-        <div class="summary-box-header">Wide Box</div>
+        <div class="summary-box-header">Recent Workouts</div>
         <div class="summary-card wide">
           <div class="summary-stats">
-            <div>Wide placeholder content that spans both columns.</div>
+            <!-- Recent Workouts Box -->
+            <div id="recentWorkoutsBox"></div>
           </div>
         </div>
       </div>
@@ -2568,6 +2696,235 @@ renderSummary = function(){
 
   // Ensure full-width rows span both columns
   wrap.querySelectorAll('.row-wide').forEach(node=>{ try{ node.style.gridColumn = '1 / -1'; } catch(_) {} });
+
+  // ==== Render Recent Workouts in the wide box ====
+  const recentBox = document.querySelector("#recentWorkoutsBox");
+  if (recentBox) {
+    renderRecentWorkouts(recentBox, state.logs || []);
+  }
 };
+
+// ==== Recent Workouts Table ====
+function ensureRecentTableStyles(){
+  // Always (re)write the styles so later tweaks actually take effect
+  const css = `
+    /* width + alignment */
+    .recent-workouts-table{ width:100%; border-collapse:collapse; border-spacing:0; }
+    .recent-workouts-table thead th{ font-weight:600; }
+    .recent-workouts-table th, .recent-workouts-table td{
+      text-align:center;
+      padding:2px 8px;   /* tighter vertical padding */
+      line-height:1.1;   /* tighter line-height */
+    }
+    .recent-workouts-table tr{ height:auto; }
+    .recent-workouts-table thead th{ padding-bottom:6px; }
+
+    .recent-workouts-table th.left, .recent-workouts-table td:first-child{ text-align:left; }
+    /* last column hugs right edge */
+    .recent-workouts-table td:last-child{ text-align:right; padding-right:2px; }
+
+    /* symbols & delete button */
+    .recent-workouts-table td .sym{ display:inline-block; }
+    .recent-workouts-table .delete-btn{ color:#5b5b5b; }
+    .recent-workouts-table .delete-btn:hover{ color:#8a8a8a; }
+
+    /* center headers except the first */
+    .recent-workouts-table thead th:not(.left){ text-align:center; }
+  `;
+  let s = document.getElementById('recent-table-styles');
+  if (!s) { s = document.createElement('style'); s.id = 'recent-table-styles'; document.head.appendChild(s); }
+  s.textContent = css; // update even if it already exists
+}
+
+function renderRecentWorkouts(container, workouts) {
+  const uid = state.userId || 'u_camp';
+
+  // Helper to parse a Date from mixed inputs
+  const ts = (l) => {
+    if (l.timestamp) return new Date(l.timestamp);
+    if (l.date) return new Date(String(l.date).includes('T') ? l.date : (l.date + 'T12:00:00'));
+    return new Date(0);
+  };
+
+  // Most recent 10 logs for the current user
+  const rows = (workouts || [])
+    .filter(l => (l.user_id || 'u_camp') === uid)
+    .slice()
+    .sort((a, b) => ts(b) - ts(a))
+    .slice(0, 10);
+
+  container.innerHTML = `
+    <div class="recent-grid recent-header">
+      <div class="col name">Workout</div>
+      <div class="col weight">Weight</div>
+      <div class="col reps">Reps</div>
+      <div class="col status">Status</div>
+      <div class="col action"></div>
+    </div>
+    <div class="recent-list"></div>
+  `;
+
+  // Inject table with column sizing via <colgroup>
+  container.innerHTML = `
+    <table class="recent-workouts-table align-centered">
+      <colgroup>
+        <col style="width:55%">  
+        <col style="width:12%">
+        <col style="width:12%">
+        <col style="width:11%">
+        <col style="width:10%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="left">Workout</th>
+          <th>Weight</th>
+          <th>Reps</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  `;
+  const table = container.querySelector('table');
+  ensureRecentTableStyles();
+  const tbody = table.querySelector('tbody');
+  window.__recentRows = rows;
+  rows.forEach((l, i) => {
+    const ex = (state.byId && state.byId[l.exercise_id]) || {};
+    const name = ex.name || l.name || '—';
+    const variation = ex.variation || l.variation || '';
+    const nameHTML = `${name}${variation ? ' • ' + variation : ''}`;
+    const weight = (l.weight_lb != null) ? Math.round(l.weight_lb) : (l.weight != null ? l.weight : '—');
+    const repsAch = Number(l.fail_reps ?? l.planned_reps ?? 0);
+    const repsPlan = Number(l.planned_reps ?? 0);
+    const statusClass = (repsAch > repsPlan) ? 'up' : (repsAch < repsPlan ? 'down' : 'even');
+    // Use figure dash for neutral (shorter than en dash)
+    const symbol = statusClass === 'up' ? '▲' : statusClass === 'down' ? '▼' : '‒'; // shorter dash
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-idx', String(i));
+    tr.className = statusClass;
+    tr.innerHTML = `
+      <td><span class="ellipsis">${nameHTML}</span></td>
+      <td>${weight}</td>
+      <td>${repsAch || '—'}</td>
+      <td><span class="sym">${symbol}</span></td>
+      <td><button class="delete-btn" title="Remove">×</button></td>
+    `;
+    tbody.appendChild(tr);
+    // Font weights
+    tr.querySelectorAll('td').forEach(c => c.style.fontWeight = '400');
+    // Truncate workout name
+    const ell = tr.querySelector('.ellipsis');
+    ell.style.display = 'inline-block';
+    ell.style.maxWidth = '100%';
+    ell.style.whiteSpace = 'nowrap';
+    ell.style.overflow = 'hidden';
+    ell.style.textOverflow = 'ellipsis';
+    // Colorize symbol
+    const sym = tr.querySelector('.sym');
+    if (statusClass === 'up') {
+      sym.style.color = 'var(--accent)';
+    } else if (statusClass === 'down') {
+      sym.style.color = 'var(--danger, #f66)';
+      sym.style.opacity = '0.9';
+    } else {
+      sym.style.opacity = '0.5';
+    }
+    // Minimalist delete "×" button style
+    const del = tr.querySelector('.delete-btn');
+    const lastTd = tr.querySelector('td:last-child');
+    if (lastTd) {
+      lastTd.style.textAlign = 'right';
+      lastTd.style.paddingRight = '2px';
+    }
+    if (del) {
+      del.style.background = 'none';
+      del.style.border = 'none';
+      del.style.padding = '0';
+      del.style.margin = '0';
+      del.style.fontSize = '18px';
+      del.style.lineHeight = '1';
+      del.style.opacity = '.55';
+      del.style.cursor = 'pointer';
+      del.style.color = '#5b5b5b';
+      del.onmouseenter = () => del.style.opacity = '.9';
+      del.onmouseleave = () => del.style.opacity = '.55';
+    }
+    // (Delete handler is now delegated)
+  });
+  ensureRecentDeleteHandler();
+}
+
+// Delegated delete handler for Recent Workouts table (robust across re-renders)
+function ensureRecentDeleteHandler(){
+  if (document.__recentDeleteBound) return;
+  document.__recentDeleteBound = true;
+
+  document.addEventListener('click', async function(e){
+    const btn = e.target && e.target.closest('.recent-workouts-table .delete-btn');
+    if (!btn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Resolve the row/log data from the global cache populated by renderRecentWorkouts
+    const tr = btn.closest('tr');
+    const idx = tr ? Number(tr.getAttribute('data-idx') || -1) : -1;
+    const rows = window.__recentRows || [];
+    const l = (idx >= 0 && idx < rows.length) ? rows[idx] : null;
+    if (!l) { alert('Delete failed: row not found.'); return; }
+
+    const ex = (state.byId && state.byId[l.exercise_id]) || {};
+    const labelText = (ex.name || l.name || 'Workout') + (ex.variation || l.variation ? ' • ' + (ex.variation || l.variation) : '');
+    const whenYMD = (typeof _localYMDFromLog === 'function') ? _localYMDFromLog(l) : '';
+    const whenStr = (whenYMD ? (function(d){ const mm = d.slice(5,7), dd = d.slice(8,10), yy = d.slice(2,4); return mm+'-'+dd+'-'+yy; })(whenYMD) : '');
+
+    const ok = confirm(`Delete this log entry?\n${labelText}${whenStr ? ' — ' + whenStr : ''}`);
+    if (!ok) return;
+
+    // Prefer unique row id if present
+    const rowUid = l.row_uid || l.rowUid || l.rowid || l.rowId || null;
+
+    const payload = rowUid ? {
+      action: 'deleteLog',
+      row_uid: rowUid
+    } : {
+      action: 'deleteLog',
+      user_id: l.user_id || (state.userId || 'u_camp'),
+      exercise_id: l.exercise_id || null,
+      side: l.side || null,
+      date: whenYMD || (l.date || null)
+    };
+
+    const original = btn.textContent;
+    btn.textContent = '…';
+    btn.disabled = true;
+
+    let okDelete = false, lastErr = null;
+    try{
+      const res = await apiPost('deleteLog', payload);
+      if (res && !res.error) {
+        okDelete = true;
+      } else {
+        lastErr = res && res.error;
+      }
+    } catch(err){
+      lastErr = String(err);
+    }
+
+    if (okDelete) {
+      // Remove row from UI and refresh cache/UI
+      if (tr) tr.remove();
+      try { await fetchAll(); } catch(_){}
+      toast('Deleted.');
+    } else {
+      alert('Delete failed' + (lastErr ? (': ' + lastErr) : '.'));
+    }
+
+    btn.textContent = original;
+    btn.disabled = false;
+  }, true);
+}
 
     
