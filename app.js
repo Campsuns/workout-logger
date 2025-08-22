@@ -1621,12 +1621,30 @@ function ensureHeatmapStyles(){
     .hm-body{ fill:#15191e; }
     .hm-outline{ fill:none; stroke:rgba(255,255,255,.10); stroke-width:1.5; vector-effect:non-scaling-stroke; }
     .hm-muscle{ fill: var(--accent); fill-opacity:.18; stroke: rgba(255,255,255,.18); stroke-width:.75; vector-effect: non-scaling-stroke; }
+
+    /* 6-tier opacity (quantiles) */
     .hm-muscle.t1{ fill: var(--accent); fill-opacity:.90; }
     .hm-muscle.t2{ fill: var(--accent); fill-opacity:.55; }
     .hm-muscle.t3{ fill: var(--accent); fill-opacity:.30; }
+    .hm-muscle.t4{ fill: var(--accent); fill-opacity:.22; }
+    .hm-muscle.t5{ fill: var(--accent); fill-opacity:.16; }
+    .hm-muscle.t6{ fill: var(--accent); fill-opacity:.10; }
+
     .hm-muscle.dim{ fill: var(--accent); fill-opacity:.10; }
-    .hm-muscle.warn{ fill: var(--warn, #F6C453) !important; fill-opacity:.15 !important; }
-    .hm-muscle.danger{ fill: var(--danger, #FF6B6B) !important; fill-opacity:.15 !important; }
+    .hm-muscle.warn{ fill: var(--warn, #F6C453) !important; }
+    .hm-muscle.danger{ fill: var(--danger, #FF6B6B) !important; }
+
+    /* Fade-on animation: start red, fade to final color & opacity */
+    @keyframes hmFadeOn {
+      0%   { fill: var(--danger, #FF6B6B); fill-opacity: .15; }
+      100% { fill: var(--final-fill, var(--accent)); fill-opacity: var(--final-op, .18); }
+    }
+    .hm-muscle.animating {
+      animation-name: hmFadeOn;
+      animation-duration: var(--hm-dur, .8s);
+      animation-timing-function: ease-out;
+      animation-fill-mode: both;
+    }
   `;
   document.head.appendChild(s);
 }
@@ -1765,16 +1783,40 @@ function applyHeatToSvg(svgRoot, score, idMap){
     el.classList.add(tier);
 
     // Absolute score-based warnings override color via CSS hooks:
-// danger: ≤2 points, warn: ≤9 points (and not danger)
-const raw = Number((score && score.get) ? score.get(muscle) : 0) || 0;
-if (raw <= 2) {
-  el.classList.add('danger');
-} else if (raw <= 9) {
-  el.classList.add('warn');
-}
+    // danger: ≤2 points, warn: ≤9 points (and not danger)
+    const raw = Number((score && score.get) ? score.get(muscle) : 0) || 0;
+    if (raw <= 2) {
+      el.classList.add('danger');
+    } else if (raw <= 9) {
+      el.classList.add('warn');
+    }
 
     // Ensure no stray inline opacity fights CSS tiers
     el.style.opacity = '';
+
+    // --- Fade-on animation parameters per tier ---
+    const TIER_OPACITY = { t1:.90, t2:.55, t3:.30, t4:.22, t5:.16, t6:.10 };
+    const TIER_DUR     = { t1:1.4, t2:1.1, t3:.9,  t4:.7,  t5:.5,  t6:.35 };
+
+    // Decide final color & opacity: warn/danger override accent
+    const finalFill = el.classList.contains('danger')
+      ? getComputedStyle(document.body).getPropertyValue('--danger') || '#FF6B6B'
+      : el.classList.contains('warn')
+        ? getComputedStyle(document.body).getPropertyValue('--warn') || '#F6C453'
+        : getComputedStyle(document.body).getPropertyValue('--accent') || '#2bd2c8';
+
+    const finalOp = TIER_OPACITY[tier] ?? .18;
+    const durSec  = TIER_DUR[tier] ?? .8;
+
+    // Pass values via CSS variables and (re)start the animation
+    el.style.setProperty('--final-fill', finalFill.trim() || '#2bd2c8');
+    el.style.setProperty('--final-op', String(finalOp));
+    el.style.setProperty('--hm-dur', durSec + 's');
+
+    // Restart animation each render
+    el.classList.remove('animating');
+    void el.offsetWidth; // reflow to reset animation
+    el.classList.add('animating');
   }
 }
 
@@ -1932,6 +1974,12 @@ function ensureAtlasMobileBleed() {
       .atlas-muscle.warn{ fill: var(--warn, #F6C453) !important; fill-opacity:.15 !important; }
       .atlas-muscle.danger{ fill: var(--danger, #FF6B6B) !important; fill-opacity:.15 !important; }
       .atlas-muscle.dim{ fill: var(--accent); fill-opacity:.10; }
+      /* Fade-on animation (start red ➜ fade to tier/warn/danger color) */
+      .atlas-muscle.animating{ animation: hmFadeOn var(--hm-dur, .8s) ease-out both; }
+      @keyframes hmFadeOn{
+        0%   { fill: var(--danger, #FF6B6B); fill-opacity:.15; }
+        100% { fill: var(--final-fill, var(--accent)); fill-opacity: var(--final-op, .18); }
+      }
     `;
     document.head.appendChild(s);
   }
@@ -2002,6 +2050,10 @@ function ensureAtlasMobileBleed() {
         if (el){ el.classList.remove('t1','t2','t3','t4','t5','t6','warn','danger'); el.classList.add('dim'); }
       });
 
+      // Tier opacity/duration maps (match simplified heatmap)
+      const TIER_OPACITY = { t1:.90, t2:.55, t3:.30, t4:.22, t5:.16, t6:.10 };
+      const TIER_DUR     = { t1:1.4, t2:1.1, t3:.9,  t4:.7,  t5:.5,  t6:.35 };
+
       // Apply tier classes per muscle name
       Object.entries(idMap).forEach(([muscle, entry])=>{
         const ids = Array.isArray(entry) ? entry : [entry];
@@ -2036,11 +2088,32 @@ function ensureAtlasMobileBleed() {
           clearInline(el);
 
           // Absolute warnings override tier color via CSS
-if (raw <= 2) {
-  el.classList.add('danger');
-} else if (raw <= 9) {
-  el.classList.add('warn');
-}
+          if (raw <= 2) {
+            el.classList.add('danger');
+          } else if (raw <= 9) {
+            el.classList.add('warn');
+          }
+
+          // Decide final color by state (danger/warn override accent)
+          const rootStyles = getComputedStyle(document.body);
+          const finalFill =
+            el.classList.contains('danger') ? (rootStyles.getPropertyValue('--danger') || '#FF6B6B') :
+            el.classList.contains('warn')   ? (rootStyles.getPropertyValue('--warn')   || '#F6C453') :
+                                              (rootStyles.getPropertyValue('--accent') || '#2bd2c8');
+
+          // Final opacity & duration by tier
+          const finalOp = TIER_OPACITY[tier] ?? .18;
+          const durSec  = TIER_DUR[tier] ?? .8;
+
+          // Pass to CSS and (re)start animation
+          el.style.setProperty('--final-fill', finalFill.trim() || '#2bd2c8');
+          el.style.setProperty('--final-op', String(finalOp));
+          el.style.setProperty('--hm-dur', durSec + 's');
+
+          // Restart fade each render
+          el.classList.remove('animating');
+          void el.offsetWidth; // reflow
+          el.classList.add('animating');
         });
       });
     }
