@@ -365,6 +365,60 @@ function today(){
   const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`; // local YYYY-MM-DD to avoid off-by-one
 }
+
+// Parse a date-like value into a LOCAL Date (no UTC shift). Accepts 'YYYY-MM-DD', 'M/D/YYYY[, time]', Date, or ISO.
+function _parseLocalDate(val){
+  if (val instanceof Date && !isNaN(val)) return new Date(val.getFullYear(), val.getMonth(), val.getDate(), 12, 0, 0);
+  if (typeof val === 'string'){
+    // Strict local Y-M-D
+    let m = val.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0);
+    // US M/D/YYYY [HH:MM:SS]
+    m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) return new Date(+m[3], +m[1]-1, +m[2], +(m[4]||12), +(m[5]||0), +(m[6]||0));
+    // ISO → fall back to Date (may be UTC), then normalize to local midnight-ish
+    const d = new Date(val);
+    if (!isNaN(d)) return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+  }
+  // Fallback: now
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+}
+
+// Get a local Date for a log row using the existing `_localYMDFromLog(l)` when available.
+function _localDateFromLog(l){
+  try{
+    if (typeof _localYMDFromLog === 'function'){
+      const ymd = _localYMDFromLog(l);
+      if (ymd){ const [y,m,d] = ymd.split('-').map(Number); return new Date(y, m-1, d, 12, 0, 0); }
+    }
+  }catch(_){}
+  return _parseLocalDate(l?.date || l?.timestamp);
+}
+
+// Return true if a LOG entry falls within the current calendar period (week/month/year), using LOCAL bounds.
+function inPeriodLog(l, period){
+  const now = new Date();
+  let start;
+  if (period === 'week'){
+    // Use configured week start (0=Sun,1=Mon). We already have a helper in file used elsewhere: `_startOfWeekLocal`.
+    const ws = (CONFIG && Number.isFinite(CONFIG.WEEK_START)) ? CONFIG.WEEK_START : 1;
+    start = _startOfWeekLocal(now, ws);
+  } else if (period === 'month'){
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+  } else if (period === 'year'){
+    start = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  }
+  const end = new Date(start);
+  if (period === 'week')      end.setDate(start.getDate() + 7);
+  else if (period === 'month') end.setMonth(start.getMonth() + 1, 1);
+  else if (period === 'year')  end.setFullYear(start.getFullYear() + 1, 0, 1);
+
+  const d = _localDateFromLog(l);
+  return (d >= start && d < end);
+}
 function startOfPeriod(period){
   const d=new Date();
   if(period==='week'){ const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
@@ -1588,17 +1642,22 @@ async function saveExercise(){
 const MUSCLE_LIST = ['Chest','Back','Trapezius','Shoulders','Front Delt','Rear Delt','Biceps','Triceps','Forearms','Abs','Glutes','Quads','Hamstrings','Calves'];
 const MUSCLE_POINTS = { primary:3, secondary:2, tertiary:1 };
 function musclePercents(period){
-  const logs = logsForUser().filter(l=>inPeriod(l.date||l.timestamp, period));
+  const logs = logsForUser().filter(l => inPeriodLog(l, period) && !isSkip(l));
   const score = new Map();
   for(const l of logs){
-    const ex=state.byId[l.exercise_id]; if(!ex) continue;  // only current user's exercises
+    const ex = state.byId[l.exercise_id];
+    if(!ex) continue;
+    // Half credit for unilateral entries
+    const mult = (String(l.side||'both').toLowerCase()==='both') ? 1 : 0.5;
     for(const slot of ['primary','secondary','tertiary']){
-      const m=(ex[slot]||'').trim(); if(!m) continue;
-      score.set(m, (score.get(m)||0) + MUSCLE_POINTS[slot]);
+      const m = (ex[slot]||'').trim();
+      if(!m) continue;
+      const pts = (MUSCLE_POINTS[slot]||0) * mult;
+      score.set(m, (score.get(m)||0) + pts);
     }
   }
-  const total=[...score.values()].reduce((a,b)=>a+b,0)||1;
-  const pct={}; MUSCLE_LIST.forEach(m=>pct[m]=Math.round(100*(score.get(m)||0)/total));
+  const total = [...score.values()].reduce((a,b)=>a+b,0) || 1;
+  const pct = {}; MUSCLE_LIST.forEach(m=> pct[m] = Math.round(100*(score.get(m)||0)/total));
   return pct;
 }
 function heat(pct){
@@ -1653,49 +1712,33 @@ function ensureHeatmapStyles(){
 function computeMuscleFocus(period){
   const score = new Map();
 
-  // NOTE: Chest undercount sanity fix via robust aliasing (pec/pectorals/upper/lower all → Chest).
-
-  // Map common labels to the canonical atlas keys used in the ID maps
-  // Make aliasing case‑insensitive and tolerant of hyphens/slashes/variants.
   const ALIAS_RAW = {
-    // Chest family
     'chest':'Chest','pec':'Chest','pecs':'Chest','pectoral':'Chest','pectorals':'Chest',
     'pectoralis major':'Chest','pectoralis minor':'Chest','upper chest':'Chest','lower chest':'Chest',
-    // Delts family
     'rear delt':'Back Delt','rear delts':'Back Delt','back delt':'Back Delt','back delts':'Back Delt',
     'front delt':'Front Delt','front delts':'Front Delt',
-
     'delts':'Shoulders','delt':'Shoulders','shoulder':'Shoulders','shoulders':'Shoulders',
-    // Back family
     'upper back':'Upper Back','mid back':'Upper Back','lats':'Upper Back','latissimus dorsi':'Upper Back','back':'Upper Back',
-    // Traps
     'trapezius':'Traps','traps':'Traps',
-    // Arms
     'bicep':'Biceps','biceps':'Biceps','tricep':'Triceps','triceps':'Triceps','forearm':'Forearms','forearms':'Forearms',
-    // Core
     'abs':'Core','abdominals':'Core','core':'Core',
-    // Glutes/legs
     'gluteus':'Glutes','gluteus maximus':'Glutes','glutes':'Glutes',
     'quadriceps':'Quads','quads':'Quads',
     'hamstring':'Hamstrings','hamstrings':'Hamstrings',
     'calf':'Calves','calves':'Calves',
-    // Lower back
     'lower back':'Lower Back'
   };
   const ALIAS = new Map(Object.entries(ALIAS_RAW).map(([k,v]) => [k.toLowerCase(), v]));
 
   function _canon(name){
     if(!name) return '';
-    // normalize: trim, lower, collapse whitespace, swap hyphens/slashes with spaces
-    let key = String(name).replace(/[\/\-]/g,' ').toLowerCase().trim().replace(/\s+/g,' ');
-    return ALIAS.get(key) || name; // fall back to original if not aliased
+    let key = String(name).replace(/[\/-]/g,' ').toLowerCase().trim().replace(/\s+/g,' ');
+    return ALIAS.get(key) || name;
   }
 
   function addNorm(name, pts){
     const canon = _canon(name);
     if(!canon) return;
-
-    // If a generic "Shoulders" label is used, split credit across the three heads
     if (String(canon).toLowerCase() === 'shoulders'){
       ['Front Delt','Back Delt'].forEach(k=>{
         score.set(k, (score.get(k)||0) + pts/3);
@@ -1705,15 +1748,17 @@ function computeMuscleFocus(period){
     score.set(canon, (score.get(canon)||0) + pts);
   }
 
-  const logs = logsForUser().filter(l => inPeriod(l.date||l.timestamp, period));
+  const logs = logsForUser().filter(l => inPeriodLog(l, period) && !isSkip(l));
   for(const l of logs){
     const ex = state.byId[l.exercise_id];
     if(!ex) continue;
-    addNorm(ex.primary,   3);
-    addNorm(ex.secondary, 2);
-    addNorm(ex.tertiary,  1);
+    // Half credit for unilateral entries (left/right)
+    const mult = (String(l.side||'both').toLowerCase()==='both') ? 1 : 0.5;
+    addNorm(ex.primary,   3 * mult);
+    addNorm(ex.secondary, 2 * mult);
+    addNorm(ex.tertiary,  1 * mult);
   }
-  // Debug helper: window.debugMuscles() logs the top muscles and totals
+
   if (!window.debugMuscles) {
     window.debugMuscles = function(){
       const arr = [...score.entries()].sort((a,b)=>b[1]-a[1]);
@@ -1721,7 +1766,7 @@ function computeMuscleFocus(period){
       return arr;
     };
   }
-  return score; // Map<Muscle, number>
+  return score;
 }
 
 /* ===== Heatmap tiering v2: 6 buckets (t1..t6) shared ===== */
@@ -3740,13 +3785,7 @@ function ensureRecentDeleteHandler(){
     const ok = confirm(`Delete this log entry?\n${labelText}${whenStr ? ' — ' + whenStr : ''}`);
     if (!ok) return;
 
-    // Prefer unique row id if present
-    const rowUid = l.row_uid || l.rowUid || l.rowid || l.rowId || null;
-
-    const payload = rowUid ? {
-      action: 'deleteLog',
-      row_uid: rowUid
-    } : {
+    const payload = {
       action: 'deleteLog',
       user_id: l.user_id || (state.userId || 'u_camp'),
       exercise_id: l.exercise_id || null,
